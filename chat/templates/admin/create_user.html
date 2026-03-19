@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Create User — CyberGuide AI{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-base-100">
+
+  <!-- TOP NAVBAR -->
+  <div class="navbar bg-base-200 border-b border-base-300 px-6 sticky top-0 z-10">
+    <div class="flex-1 gap-2 min-w-0 flex items-center">
+      <a href="/chat/" class="flex items-center gap-2 shrink-0 hover:opacity-80 transition-opacity">
+        <img src="{% static 'images/ATS-LOGO.png' %}" alt="CyberGuide AI" class="w-7 h-7 object-contain" />
+        <span class="font-bold text-primary hidden sm:inline">CyberGuide AI</span>
+      </a>
+      <span class="text-base-content/30">/</span>
+      <a href="/users/" class="text-sm text-base-content/60 hover:text-base-content transition-colors hidden sm:inline">Users</a>
+      <span class="text-base-content/30 hidden sm:inline">/</span>
+      <span class="text-sm font-medium truncate">Create User</span>
+    </div>
+    <div class="flex-none flex items-center gap-2">
+      <a href="/users/" class="btn btn-ghost btn-sm gap-1">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+        Back
+      </a>
+      <a href="/profile/" title="Profile"
+         class="w-9 h-9 rounded-full bg-primary text-primary-content flex items-center justify-center font-bold text-sm hover:opacity-80 transition-opacity">
+        {{ request.user.username|first|upper }}
+      </a>
+    </div>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="max-w-xl mx-auto px-4 sm:px-6 py-10">
+
+    <!-- Success panel — shown after user is created -->
+    {% if created_user and generated_password %}
+    <div class="card bg-success/10 border border-success/30 shadow-sm mb-6">
+      <div class="card-body p-6">
+        <div class="flex items-start gap-3">
+          <div class="text-success mt-0.5">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <h3 class="font-bold text-success text-lg mb-1">User created successfully</h3>
+            <p class="text-sm text-base-content/70 mb-4">
+              Account for <strong>{{ created_user.username }}</strong> is ready.
+              Share these credentials securely — the password is shown <strong>only once</strong>.
+            </p>
+
+            <!-- Credentials box -->
+            <div class="bg-base-300 rounded-xl p-4 space-y-3 mb-4">
+              <div>
+                <p class="text-xs font-semibold text-base-content/40 uppercase tracking-wider mb-1">Username</p>
+                <p class="font-mono font-bold text-base">{{ created_user.username }}</p>
+              </div>
+              <div class="divider my-1"></div>
+              <div>
+                <p class="text-xs font-semibold text-base-content/40 uppercase tracking-wider mb-1">Password</p>
+                <div class="flex items-center gap-2">
+                  <p id="generated-pwd"
+                     data-password="{{ generated_password }}"
+                     class="font-mono font-bold text-lg tracking-wider flex-1">{{ generated_password }}</p>
+                  <button id="copy-btn"
+                          onclick="copyPassword()"
+                          class="btn btn-sm btn-ghost gap-1 shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    Copy
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="alert alert-warning py-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <span class="text-xs">Copy this password now. It will not be shown again.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Create user form -->
+    <div class="card bg-base-200 shadow-sm">
+      <div class="card-body p-6 sm:p-8">
+        <h1 class="text-xl font-bold mb-1">Create New User</h1>
+        <p class="text-sm text-base-content/50 mb-6">A secure password will be auto-generated and displayed once after creation.</p>
+
+        <form method="post" novalidate>
+          {% csrf_token %}
+
+          <!-- Name row -->
+          <div class="grid grid-cols-2 gap-4 mb-4">
+            <div class="form-control">
+              <label class="label pb-1">
+                <span class="label-text font-medium text-sm">First Name</span>
+              </label>
+              {{ form.first_name }}
+              {% for error in form.first_name.errors %}
+              <label class="label pt-1">
+                <span class="label-text-alt text-error">{{ error }}</span>
+              </label>
+              {% endfor %}
+            </div>
+            <div class="form-control">
+              <label class="label pb-1">
+                <span class="label-text font-medium text-sm">Last Name</span>
+              </label>
+              {{ form.last_name }}
+              {% for error in form.last_name.errors %}
+              <label class="label pt-1">
+                <span class="label-text-alt text-error">{{ error }}</span>
+              </label>
+              {% endfor %}
+            </div>
+          </div>
+
+          <!-- Username -->
+          <div class="form-control mb-4">
+            <label class="label pb-1">
+              <span class="label-text font-medium text-sm">Username <span class="text-error">*</span></span>
+            </label>
+            {{ form.username }}
+            {% for error in form.username.errors %}
+            <label class="label pt-1">
+              <span class="label-text-alt text-error">{{ error }}</span>
+            </label>
+            {% endfor %}
+          </div>
+
+          <!-- Email -->
+          <div class="form-control mb-5">
+            <label class="label pb-1">
+              <span class="label-text font-medium text-sm">Email <span class="text-error">*</span></span>
+            </label>
+            {{ form.email }}
+            {% for error in form.email.errors %}
+            <label class="label pt-1">
+              <span class="label-text-alt text-error">{{ error }}</span>
+            </label>
+            {% endfor %}
+          </div>
+
+          <!-- Role -->
+          <div class="form-control mb-6">
+            <label class="label cursor-pointer justify-start gap-3 p-4 rounded-xl bg-base-300 hover:bg-base-300/70 transition-colors">
+              {{ form.is_admin }}
+              <div>
+                <p class="font-medium text-sm">{{ form.is_admin.label }}</p>
+                <p class="text-xs text-base-content/40">Admin users can create, edit, and delete other accounts</p>
+              </div>
+            </label>
+          </div>
+
+          <!-- Non-field errors -->
+          {% if form.non_field_errors %}
+          <div class="alert alert-error mb-4 py-3">
+            <div class="flex flex-col gap-0.5">
+              {% for error in form.non_field_errors %}
+              <span class="text-sm">{{ error }}</span>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+
+          <button type="submit" class="btn btn-primary w-full gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+            </svg>
+            Create Account & Generate Password
+          </button>
+        </form>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function copyPassword() {
+  const el = document.getElementById('generated-pwd');
+  const btn = document.getElementById('copy-btn');
+  if (!el) return;
+  navigator.clipboard.writeText(el.dataset.password).then(function() {
+    btn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+      </svg>
+      Copied!`;
+    btn.classList.add('text-success');
+    setTimeout(function() {
+      btn.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+        Copy`;
+      btn.classList.remove('text-success');
+    }, 3000);
+  });
+}
+</script>
+{% endblock %}

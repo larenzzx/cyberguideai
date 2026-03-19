@@ -59,6 +59,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'chat.middleware.ForcePasswordChangeMiddleware',  # Redirect on first login if password must change
 ]
 
 ROOT_URLCONF = 'cyberguide.urls'

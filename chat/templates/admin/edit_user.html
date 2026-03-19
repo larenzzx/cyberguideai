@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Edit {{ target_user.username }} — CyberGuide AI{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-base-100">
+
+  <!-- TOP NAVBAR -->
+  <div class="navbar bg-base-200 border-b border-base-300 px-6 sticky top-0 z-10">
+    <div class="flex-1 gap-2 min-w-0 flex items-center">
+      <a href="/chat/" class="flex items-center gap-2 shrink-0 hover:opacity-80 transition-opacity">
+        <img src="{% static 'images/ATS-LOGO.png' %}" alt="CyberGuide AI" class="w-7 h-7 object-contain" />
+        <span class="font-bold text-primary hidden sm:inline">CyberGuide AI</span>
+      </a>
+      <span class="text-base-content/30">/</span>
+      <a href="/users/" class="text-sm text-base-content/60 hover:text-base-content transition-colors hidden sm:inline">Users</a>
+      <span class="text-base-content/30 hidden sm:inline">/</span>
+      <span class="text-sm font-medium truncate">{{ target_user.username }}</span>
+    </div>
+    <div class="flex-none flex items-center gap-2">
+      <a href="/users/" class="btn btn-ghost btn-sm gap-1">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+        Back
+      </a>
+      <a href="/profile/" title="Profile"
+         class="w-9 h-9 rounded-full bg-primary text-primary-content flex items-center justify-center font-bold text-sm hover:opacity-80 transition-opacity">
+        {{ request.user.username|first|upper }}
+      </a>
+    </div>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="max-w-xl mx-auto px-4 sm:px-6 py-10">
+
+    <!-- User header card -->
+    <div class="card bg-base-200 border border-base-300 mb-6">
+      <div class="card-body p-5 flex-row items-center gap-4">
+        <div class="w-14 h-14 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xl font-bold shrink-0">
+          {{ target_user.username|first|upper }}
+        </div>
+        <div class="min-w-0">
+          <h2 class="font-bold text-lg truncate">{{ target_user.username }}</h2>
+          {% if target_user.get_full_name %}
+          <p class="text-sm text-base-content/50 truncate">{{ target_user.get_full_name }}</p>
+          {% endif %}
+          <div class="flex items-center gap-2 mt-1">
+            {% if target_user.is_staff %}
+            <span class="badge badge-primary badge-sm">Admin</span>
+            {% else %}
+            <span class="badge badge-ghost badge-sm text-base-content/50">Member</span>
+            {% endif %}
+            <span class="text-xs text-base-content/30">Joined {{ target_user.date_joined|date:"M d, Y" }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit form -->
+    <div class="card bg-base-200 shadow-sm">
+      <div class="card-body p-6 sm:p-8">
+        <h1 class="text-xl font-bold mb-5">Edit Account</h1>
+
+        <form method="post" novalidate>
+          {% csrf_token %}
+
+          <!-- Name row -->
+          <div class="grid grid-cols-2 gap-4 mb-4">
+            <div class="form-control">
+              <label class="label pb-1">
+                <span class="label-text font-medium text-sm">First Name</span>
+              </label>
+              {{ form.first_name }}
+              {% for error in form.first_name.errors %}
+              <label class="label pt-1">
+                <span class="label-text-alt text-error">{{ error }}</span>
+              </label>
+              {% endfor %}
+            </div>
+            <div class="form-control">
+              <label class="label pb-1">
+                <span class="label-text font-medium text-sm">Last Name</span>
+              </label>
+              {{ form.last_name }}
+              {% for error in form.last_name.errors %}
+              <label class="label pt-1">
+                <span class="label-text-alt text-error">{{ error }}</span>
+              </label>
+              {% endfor %}
+            </div>
+          </div>
+
+          <!-- Username -->
+          <div class="form-control mb-4">
+            <label class="label pb-1">
+              <span class="label-text font-medium text-sm">Username <span class="text-error">*</span></span>
+            </label>
+            {{ form.username }}
+            {% for error in form.username.errors %}
+            <label class="label pt-1">
+              <span class="label-text-alt text-error">{{ error }}</span>
+            </label>
+            {% endfor %}
+          </div>
+
+          <!-- Email -->
+          <div class="form-control mb-4">
+            <label class="label pb-1">
+              <span class="label-text font-medium text-sm">Email <span class="text-error">*</span></span>
+            </label>
+            {{ form.email }}
+            {% for error in form.email.errors %}
+            <label class="label pt-1">
+              <span class="label-text-alt text-error">{{ error }}</span>
+            </label>
+            {% endfor %}
+          </div>
+
+          <!-- Password reset -->
+          <div class="form-control mb-5">
+            <label class="label pb-1">
+              <span class="label-text font-medium text-sm">{{ form.new_password.label }}</span>
+            </label>
+            {{ form.new_password }}
+            <label class="label pt-1">
+              <span class="label-text-alt text-base-content/40">Leave blank to keep the current password</span>
+            </label>
+            {% for error in form.new_password.errors %}
+            <label class="label pt-0">
+              <span class="label-text-alt text-error">{{ error }}</span>
+            </label>
+            {% endfor %}
+          </div>
+
+          <!-- Role toggle -->
+          <div class="form-control mb-6">
+            <label class="label cursor-pointer justify-start gap-3 p-4 rounded-xl bg-base-300 hover:bg-base-300/70 transition-colors">
+              {{ form.is_admin }}
+              <div>
+                <p class="font-medium text-sm">{{ form.is_admin.label }}</p>
+                <p class="text-xs text-base-content/40">Admin users can create, edit, and delete other accounts</p>
+              </div>
+            </label>
+          </div>
+
+          <!-- Non-field errors -->
+          {% if form.non_field_errors %}
+          <div class="alert alert-error mb-4 py-3">
+            <div class="flex flex-col gap-0.5">
+              {% for error in form.non_field_errors %}
+              <span class="text-sm">{{ error }}</span>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+
+          <div class="flex gap-3">
+            <a href="/users/" class="btn btn-ghost flex-1">Cancel</a>
+            <button type="submit" class="btn btn-primary flex-1">Save Changes</button>
+          </div>
+        </form>
+
+      </div>
+    </div>
+
+    <!-- Danger zone -->
+    {% if target_user != request.user %}
+    <div class="card bg-base-200 border border-error/20 mt-6">
+      <div class="card-body p-5">
+        <h3 class="font-semibold text-error text-sm mb-1">Danger Zone</h3>
+        <p class="text-xs text-base-content/50 mb-3">
+          Permanently delete this account and all associated conversations.
+        </p>
+        <button onclick="document.getElementById('delete-modal').showModal()"
+                class="btn btn-error btn-outline btn-sm self-start">
+          Delete This Account
+        </button>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+
+<!-- Delete modal -->
+{% if target_user != request.user %}
+<dialog id="delete-modal" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg mb-2">Delete Account</h3>
+    <p class="text-base-content/60 text-sm mb-3">
+      Permanently delete <strong>{{ target_user.username }}</strong>? This cannot be undone.
+    </p>
+    <div class="alert alert-warning py-2 mb-4">
+      <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      </svg>
+      <span class="text-sm">All conversations by this user will also be deleted.</span>
+    </div>
+    <div class="modal-action gap-2">
+      <button class="btn btn-ghost" onclick="document.getElementById('delete-modal').close()">Cancel</button>
+      <form method="post" action="/users/{{ target_user.id }}/delete/" class="inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-error">Delete Account</button>
+      </form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+{% endif %}
+
+{% endblock %}

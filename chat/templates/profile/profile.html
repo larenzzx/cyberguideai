@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Profile — CyberGuide AI{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-base-100">
+
+  <!-- TOP NAVBAR -->
+  <div class="navbar bg-base-200 border-b border-base-300 px-6 sticky top-0 z-10">
+    <div class="flex-1 gap-2 min-w-0 flex items-center">
+      <a href="/chat/" class="flex items-center gap-2 shrink-0 hover:opacity-80 transition-opacity">
+        <img src="{% static 'images/ATS-LOGO.png' %}" alt="CyberGuide AI" class="w-7 h-7 object-contain" />
+        <span class="font-bold text-primary hidden sm:inline">CyberGuide AI</span>
+      </a>
+      <span class="text-base-content/30">/</span>
+      <span class="text-sm font-medium">Profile</span>
+    </div>
+    <div class="flex-none flex items-center gap-2">
+      <a href="/chat/" class="btn btn-ghost btn-sm gap-1">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-3 3v-3z" />
+        </svg>
+        <span class="hidden sm:inline">Back to Chat</span>
+      </a>
+      <button onclick="document.getElementById('logout-modal').showModal()"
+              class="btn btn-ghost btn-sm text-error gap-1">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+        </svg>
+        <span class="hidden sm:inline">Logout</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="max-w-xl mx-auto px-4 sm:px-6 py-10 space-y-6">
+
+    <!-- Profile overview card -->
+    <div class="card bg-base-200 shadow-sm">
+      <div class="card-body p-6 flex-row items-center gap-5">
+        <!-- Avatar -->
+        <div class="w-16 h-16 rounded-full bg-primary text-primary-content flex items-center justify-center text-2xl font-bold shrink-0">
+          {{ request.user.username|first|upper }}
+        </div>
+        <!-- Info -->
+        <div class="min-w-0 flex-1">
+          <h1 class="text-xl font-bold truncate">
+            {% if request.user.get_full_name %}
+              {{ request.user.get_full_name }}
+            {% else %}
+              {{ request.user.username }}
+            {% endif %}
+          </h1>
+          <p class="text-base-content/50 text-sm truncate">{{ request.user.username }}</p>
+          {% if request.user.email %}
+          <p class="text-base-content/40 text-xs mt-0.5 truncate">{{ request.user.email }}</p>
+          {% endif %}
+          <div class="flex items-center gap-3 mt-2">
+            {% if request.user.is_staff %}
+            <span class="badge badge-primary badge-sm font-medium">Admin</span>
+            {% else %}
+            <span class="badge badge-ghost badge-sm text-base-content/50">Member</span>
+            {% endif %}
+            <span class="text-xs text-base-content/30">
+              {{ conversation_count }} conversation{{ conversation_count|pluralize }}
+            </span>
+            <span class="text-xs text-base-content/30">
+              Joined {{ request.user.date_joined|date:"M Y" }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit profile form -->
+    <div class="card bg-base-200 shadow-sm">
+      <div class="card-body p-6 sm:p-8">
+        <h2 class="text-lg font-bold mb-4">Edit Profile</h2>
+
+        <form method="post" novalidate>
+          {% csrf_token %}
+          <input type="hidden" name="action" value="edit_profile" />
+
+          <div class="grid grid-cols-2 gap-4 mb-4">
+            <div class="form-control">
+              <label class="label pb-1">
+                <span class="label-text font-medium text-sm">First Name</span>
+              </label>
+              {{ form.first_name }}
+              {% for error in form.first_name.errors %}
+              <label class="label pt-1">
+                <span class="label-text-alt text-error">{{ error }}</span>
+              </label>
+              {% endfor %}
+            </div>
+            <div class="form-control">
+              <label class="label pb-1">
+                <span class="label-text font-medium text-sm">Last Name</span>
+              </label>
+              {{ form.last_name }}
+              {% for error in form.last_name.errors %}
+              <label class="label pt-1">
+                <span class="label-text-alt text-error">{{ error }}</span>
+              </label>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="form-control mb-6">
+            <label class="label pb-1">
+              <span class="label-text font-medium text-sm">Email</span>
+            </label>
+            {{ form.email }}
+            {% for error in form.email.errors %}
+            <label class="label pt-1">
+              <span class="label-text-alt text-error">{{ error }}</span>
+            </label>
+            {% endfor %}
+          </div>
+
+          <button type="submit" class="btn btn-primary w-full">Save Profile</button>
+        </form>
+
+      </div>
+    </div>
+
+    <!-- Change password form -->
+    <div class="card bg-base-200 shadow-sm">
+      <div class="card-body p-6 sm:p-8">
+        <h2 class="text-lg font-bold mb-4">Change Password</h2>
+
+        <form method="post" novalidate>
+          {% csrf_token %}
+          <input type="hidden" name="action" value="change_password" />
+
+          <div class="form-control mb-4">
+            <label class="label pb-1">
+              <span class="label-text font-medium text-sm">Current Password</span>
+            </label>
+            {{ pw_form.old_password }}
+            {% for error in pw_form.old_password.errors %}
+            <label class="label pt-1">
+              <span class="label-text-alt text-error">{{ error }}</span>
+            </label>
+            {% endfor %}
+          </div>
+
+          <div class="form-control mb-4">
+            <label class="label pb-1">
+              <span class="label-text font-medium text-sm">New Password</span>
+            </label>
+            {{ pw_form.new_password1 }}
+            {% for error in pw_form.new_password1.errors %}
+            <label class="label pt-1">
+              <span class="label-text-alt text-error">{{ error }}</span>
+            </label>
+            {% endfor %}
+          </div>
+
+          <div class="form-control mb-6">
+            <label class="label pb-1">
+              <span class="label-text font-medium text-sm">Confirm New Password</span>
+            </label>
+            {{ pw_form.new_password2 }}
+            {% for error in pw_form.new_password2.errors %}
+            <label class="label pt-1">
+              <span class="label-text-alt text-error">{{ error }}</span>
+            </label>
+            {% endfor %}
+          </div>
+
+          <!-- Non-field errors (e.g. passwords don't match) -->
+          {% if pw_form.non_field_errors %}
+          <div class="alert alert-error mb-4 py-3">
+            <div class="flex flex-col gap-0.5">
+              {% for error in pw_form.non_field_errors %}
+              <span class="text-sm">{{ error }}</span>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+
+          <button type="submit" class="btn btn-outline w-full">Update Password</button>
+        </form>
+
+      </div>
+    </div>
+
+    <!-- Admin quick link -->
+    {% if request.user.is_staff %}
+    <div class="card bg-primary/10 border border-primary/20">
+      <div class="card-body p-5 flex-row items-center gap-4">
+        <div class="text-primary">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </div>
+        <div class="flex-1">
+          <p class="font-semibold text-sm">Admin Access</p>
+          <p class="text-xs text-base-content/50">Manage user accounts and permissions</p>
+        </div>
+        <a href="/users/" class="btn btn-primary btn-sm">Manage Users</a>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

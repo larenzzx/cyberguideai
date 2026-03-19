@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}User Management — CyberGuide AI{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-base-100">
+
+  <!-- TOP NAVBAR -->
+  <div class="navbar bg-base-200 border-b border-base-300 px-6 sticky top-0 z-10">
+    <div class="flex-1 gap-2 min-w-0">
+      <a href="/chat/" class="flex items-center gap-2 shrink-0 hover:opacity-80 transition-opacity">
+        <img src="{% static 'images/ATS-LOGO.png' %}" alt="CyberGuide AI" class="w-7 h-7 object-contain" />
+        <span class="font-bold text-primary hidden sm:inline">CyberGuide AI</span>
+      </a>
+      <span class="text-base-content/30">/</span>
+      <span class="text-sm font-medium text-base-content/70 truncate">User Management</span>
+    </div>
+    <div class="flex-none flex items-center gap-2">
+      <a href="/chat/" class="btn btn-ghost btn-sm gap-1">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-3 3v-3z" />
+        </svg>
+        <span class="hidden sm:inline">Back to Chat</span>
+      </a>
+      <a href="/profile/" title="Profile"
+         class="w-9 h-9 rounded-full bg-primary text-primary-content flex items-center justify-center font-bold text-sm hover:opacity-80 transition-opacity">
+        {{ request.user.username|first|upper }}
+      </a>
+    </div>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+
+    <!-- Page header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      <div>
+        <h1 class="text-2xl font-bold">Users</h1>
+        <p class="text-base-content/50 text-sm mt-0.5">{{ users.count }} active account{{ users.count|pluralize }}{% if pending_users %} · <span class="text-warning font-medium">{{ pending_users.count }} pending</span>{% endif %}</p>
+      </div>
+      <a href="/users/create/" class="btn btn-primary gap-2 self-start sm:self-auto">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+        </svg>
+        Create User
+      </a>
+    </div>
+
+    <!-- Pending Approval section -->
+    {% if pending_users %}
+    <div class="card bg-warning/8 border border-warning/25 shadow-sm overflow-hidden mb-6">
+      <div class="px-5 py-3 border-b border-warning/20 flex items-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span class="text-sm font-semibold text-warning">Pending Approval ({{ pending_users.count }})</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="table">
+          <thead class="bg-warning/5">
+            <tr>
+              <th class="text-xs uppercase tracking-wider text-base-content/50 font-semibold">User</th>
+              <th class="text-xs uppercase tracking-wider text-base-content/50 font-semibold hidden md:table-cell">Email</th>
+              <th class="text-xs uppercase tracking-wider text-base-content/50 font-semibold hidden lg:table-cell">Registered</th>
+              <th class="text-xs uppercase tracking-wider text-base-content/50 font-semibold text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for puser in pending_users %}
+            <tr class="hover:bg-warning/5 transition-colors">
+              <td>
+                <div class="flex items-center gap-3">
+                  <div class="w-9 h-9 rounded-full bg-warning/20 text-warning flex items-center justify-center text-sm font-bold shrink-0">
+                    {{ puser.username|first|upper }}
+                  </div>
+                  <div class="min-w-0">
+                    <p class="font-semibold text-sm truncate max-w-[140px]">{{ puser.username }}</p>
+                    {% if puser.get_full_name %}
+                    <p class="text-xs text-base-content/40 truncate max-w-[140px]">{{ puser.get_full_name }}</p>
+                    {% endif %}
+                  </div>
+                </div>
+              </td>
+              <td class="hidden md:table-cell">
+                <span class="text-sm text-base-content/70">{{ puser.email|default:"—" }}</span>
+              </td>
+              <td class="hidden lg:table-cell">
+                <span class="text-sm text-base-content/50">{{ puser.date_joined|date:"M d, Y" }}</span>
+              </td>
+              <td>
+                <div class="flex items-center justify-end gap-1">
+                  <form method="post" action="/users/{{ puser.id }}/approve/">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-success btn-xs gap-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                      </svg>
+                      Approve
+                    </button>
+                  </form>
+                  <button onclick="document.getElementById('reject-modal-{{ puser.id }}').showModal()"
+                          class="btn btn-ghost btn-xs text-error gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    Reject
+                  </button>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- User table -->
+    <div class="card bg-base-200 shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="table">
+          <thead class="bg-base-300">
+            <tr>
+              <th class="text-xs uppercase tracking-wider text-base-content/50 font-semibold">User</th>
+              <th class="text-xs uppercase tracking-wider text-base-content/50 font-semibold hidden md:table-cell">Email</th>
+              <th class="text-xs uppercase tracking-wider text-base-content/50 font-semibold">Role</th>
+              <th class="text-xs uppercase tracking-wider text-base-content/50 font-semibold hidden lg:table-cell">Chats</th>
+              <th class="text-xs uppercase tracking-wider text-base-content/50 font-semibold hidden lg:table-cell">Joined</th>
+              <th class="text-xs uppercase tracking-wider text-base-content/50 font-semibold text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for user in users %}
+            <tr class="hover:bg-base-300/50 transition-colors {% if user == request.user %}bg-primary/5{% endif %}">
+              <!-- User info -->
+              <td>
+                <div class="flex items-center gap-3">
+                  <div class="w-9 h-9 rounded-full bg-primary/20 text-primary flex items-center justify-center text-sm font-bold shrink-0">
+                    {{ user.username|first|upper }}
+                  </div>
+                  <div class="min-w-0">
+                    <p class="font-semibold text-sm truncate max-w-[140px]">
+                      {{ user.username }}
+                      {% if user == request.user %}
+                      <span class="text-xs text-base-content/30 font-normal">(you)</span>
+                      {% endif %}
+                    </p>
+                    {% if user.get_full_name %}
+                    <p class="text-xs text-base-content/40 truncate max-w-[140px]">{{ user.get_full_name }}</p>
+                    {% endif %}
+                  </div>
+                </div>
+              </td>
+              <!-- Email (hidden on small screens) -->
+              <td class="hidden md:table-cell">
+                <span class="text-sm text-base-content/70 truncate max-w-[180px] block">{{ user.email|default:"—" }}</span>
+              </td>
+              <!-- Role badge -->
+              <td>
+                {% if user.is_staff %}
+                  <span class="badge badge-primary badge-sm font-medium">Admin</span>
+                {% else %}
+                  <span class="badge badge-ghost badge-sm text-base-content/50">Member</span>
+                {% endif %}
+              </td>
+              <!-- Chat count -->
+              <td class="hidden lg:table-cell">
+                <span class="text-sm text-base-content/60">{{ user.conversation_count }}</span>
+              </td>
+              <!-- Date joined -->
+              <td class="hidden lg:table-cell">
+                <span class="text-sm text-base-content/50">{{ user.date_joined|date:"M d, Y" }}</span>
+              </td>
+              <!-- Actions -->
+              <td>
+                <div class="flex items-center justify-end gap-1">
+                  <a href="/users/{{ user.id }}/edit/"
+                     class="btn btn-ghost btn-xs gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Edit
+                  </a>
+                  {% if user != request.user %}
+                  <button onclick="document.getElementById('delete-modal-{{ user.id }}').showModal()"
+                          class="btn btn-ghost btn-xs text-error gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Delete
+                  </button>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="6" class="text-center py-12 text-base-content/40">No users found.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Reject (delete) modals for pending users -->
+{% for puser in pending_users %}
+<dialog id="reject-modal-{{ puser.id }}" class="modal">
+  <div class="modal-box max-w-sm">
+    <h3 class="font-bold text-lg mb-2">Reject Registration</h3>
+    <p class="text-base-content/60 text-sm mb-3">
+      Reject and permanently delete the pending account for <strong>{{ puser.username }}</strong>?
+    </p>
+    {% if puser.email %}<p class="text-sm text-base-content/50 mb-4">{{ puser.email }}</p>{% endif %}
+    <p class="text-xs text-base-content/40 mb-4">This cannot be undone. The user will need to register again.</p>
+    <div class="modal-action gap-2">
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('reject-modal-{{ puser.id }}').close()">Cancel</button>
+      <form method="post" action="/users/{{ puser.id }}/delete/" class="inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-error btn-sm">Reject & Delete</button>
+      </form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+{% endfor %}
+
+<!-- Delete confirmation modals (one per active user) -->
+{% for user in users %}
+{% if user != request.user %}
+<dialog id="delete-modal-{{ user.id }}" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg mb-2">Delete User</h3>
+    <p class="text-base-content/60 text-sm mb-1">You are about to permanently delete:</p>
+    <p class="font-semibold mb-1">{{ user.username }}</p>
+    {% if user.get_full_name %}<p class="text-sm text-base-content/50 mb-1">{{ user.get_full_name }}</p>{% endif %}
+    <p class="text-sm text-base-content/50 mb-4">{{ user.email }}</p>
+    <div class="alert alert-warning py-2 mb-4">
+      <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      </svg>
+      <span class="text-sm">This will delete all their conversations and cannot be undone.</span>
+    </div>
+    <div class="modal-action gap-2">
+      <button class="btn btn-ghost" onclick="document.getElementById('delete-modal-{{ user.id }}').close()">Cancel</button>
+      <form method="post" action="/users/{{ user.id }}/delete/" class="inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-error">Delete Account</button>
+      </form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+{% endif %}
+{% endfor %}
+
+{% endblock %}

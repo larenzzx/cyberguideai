@@ -1,98 +1,94 @@
 {% extends "base.html" %}
 {% load static %}
 
-<!--
-  REGISTRATION PAGE
-
-  LEARNING: Same hero + card pattern as the login page.
-  The form comes from RegisterForm in forms.py — a custom form
-  that extends Django's UserCreationForm to add email.
-
-  Notice how we render form fields manually instead of {{ form.as_p }}.
-  This gives us full control over styling with DaisyUI classes.
--->
-
 {% block title %}Register — CyberGuide AI{% endblock %}
 
 {% block content %}
 <div class="hero min-h-screen bg-base-200">
-  <div class="hero-content flex-col w-full max-w-md">
+  <div class="hero-content flex-col w-full max-w-md px-4">
 
-    <!-- Logo / Branding -->
-    <div class="text-center mb-4">
-      <div class="text-5xl mb-3">🛡️</div>
+    <!-- Branding -->
+    <div class="text-center mb-6">
+      <img src="{% static 'images/ATS-LOGO.png' %}" alt="CyberGuide AI" class="w-20 h-20 object-contain mx-auto mb-4" />
       <h1 class="text-4xl font-bold text-primary">CyberGuide AI</h1>
-      <p class="text-base-content/60 mt-2">Create your account</p>
+      <p class="text-base-content/50 mt-2">Cybersecurity Assistant</p>
     </div>
 
-    <!-- Registration Card -->
+    <!-- Card -->
     <div class="card w-full bg-base-100 shadow-xl">
-      <div class="card-body">
-        <h2 class="card-title text-2xl mb-4">Create Account</h2>
+      <div class="card-body p-8">
+        <h2 class="text-xl font-bold mb-5">Create Account</h2>
 
-        <form method="post">
+        <!-- Non-field errors -->
+        {% if form.non_field_errors %}
+        <div class="alert alert-error mb-4 py-3">
+          <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div class="flex flex-col gap-0.5">
+            {% for error in form.non_field_errors %}
+            <span class="text-sm">{{ error }}</span>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        <form method="post" novalidate>
           {% csrf_token %}
-
-          <!-- Non-field errors -->
-          {% if form.non_field_errors %}
-            <div class="alert alert-error mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span>{{ form.non_field_errors.as_text }}</span>
-            </div>
-          {% endif %}
 
           <!-- Username -->
           <div class="form-control mb-4">
-            <label class="label">
-              <span class="label-text font-semibold">Username</span>
+            <label class="label pb-1">
+              <span class="label-text font-medium">Username</span>
             </label>
             {{ form.username }}
-            {% if form.username.errors %}
-              <label class="label">
-                <span class="label-text-alt text-error">{{ form.username.errors.as_text }}</span>
-              </label>
-            {% endif %}
+            {% for error in form.username.errors %}
+            <label class="label pt-1">
+              <span class="label-text-alt text-error">{{ error }}</span>
+            </label>
+            {% endfor %}
           </div>
 
           <!-- Email -->
           <div class="form-control mb-4">
-            <label class="label">
-              <span class="label-text font-semibold">Email</span>
+            <label class="label pb-1">
+              <span class="label-text font-medium">Email</span>
             </label>
             {{ form.email }}
-            {% if form.email.errors %}
-              <label class="label">
-                <span class="label-text-alt text-error">{{ form.email.errors.as_text }}</span>
-              </label>
-            {% endif %}
+            {% for error in form.email.errors %}
+            <label class="label pt-1">
+              <span class="label-text-alt text-error">{{ error }}</span>
+            </label>
+            {% endfor %}
           </div>
 
           <!-- Password -->
           <div class="form-control mb-4">
-            <label class="label">
-              <span class="label-text font-semibold">Password</span>
+            <label class="label pb-1">
+              <span class="label-text font-medium">Password</span>
             </label>
             {{ form.password1 }}
-            {% if form.password1.errors %}
-              <label class="label">
-                <span class="label-text-alt text-error">{{ form.password1.errors.as_text }}</span>
-              </label>
-            {% endif %}
+            {% for error in form.password1.errors %}
+            <label class="label pt-1">
+              <span class="label-text-alt text-error">{{ error }}</span>
+            </label>
+            {% endfor %}
+            <label class="label pt-1">
+              <span class="label-text-alt text-base-content/40">Min. 8 characters, not entirely numeric</span>
+            </label>
           </div>
 
           <!-- Confirm Password -->
           <div class="form-control mb-6">
-            <label class="label">
-              <span class="label-text font-semibold">Confirm Password</span>
+            <label class="label pb-1">
+              <span class="label-text font-medium">Confirm Password</span>
             </label>
             {{ form.password2 }}
-            {% if form.password2.errors %}
-              <label class="label">
-                <span class="label-text-alt text-error">{{ form.password2.errors.as_text }}</span>
-              </label>
-            {% endif %}
+            {% for error in form.password2.errors %}
+            <label class="label pt-1">
+              <span class="label-text-alt text-error">{{ error }}</span>
+            </label>
+            {% endfor %}
           </div>
 
           <button type="submit" class="btn btn-primary w-full">
@@ -100,8 +96,8 @@
           </button>
         </form>
 
-        <div class="divider">or</div>
-        <p class="text-center text-base-content/70">
+        <div class="divider text-base-content/30 text-xs">or</div>
+        <p class="text-center text-sm text-base-content/50">
           Already have an account?
           <a href="/login/" class="link link-primary font-semibold">Sign in</a>
         </p>

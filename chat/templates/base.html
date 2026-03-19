@@ -5,19 +5,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{% block title %}CyberGuide AI{% endblock %}</title>
+  <link rel="icon" type="image/png" href="{% static 'images/ATS-LOGO.png' %}" />
   <link rel="stylesheet" href="{% static 'css/output.css' %}" />
 
   <style>
-    /* Smooth scrolling for the chat messages container */
-    .chat-messages-container {
-      scroll-behavior: smooth;
-    }
-    /* Auto-resize textarea reset */
-    textarea {
-      resize: none;
-      overflow: hidden;
-    }
-    /* Markdown-style formatting in chat bubbles */
+    .chat-messages-container { scroll-behavior: smooth; }
+    textarea { resize: none; overflow: hidden; }
     .chat-bubble p { margin-bottom: 0.5rem; }
     .chat-bubble p:last-child { margin-bottom: 0; }
     .chat-bubble strong { font-weight: 700; }
@@ -36,56 +29,94 @@
       overflow-x: auto;
       margin: 0.5rem 0;
     }
-    .chat-bubble pre code {
-      background: none;
-      padding: 0;
-    }
+    .chat-bubble pre code { background: none; padding: 0; }
   </style>
 
   {% block extra_head %}{% endblock %}
 </head>
 <body class="bg-base-100 text-base-content min-h-screen">
 
+  <!-- Django messages — toast notifications (auto-dismiss after 4s) -->
+  {% if messages %}
+  <div id="django-toasts" class="toast toast-top toast-end z-[999] pt-4 pr-4">
+    {% for message in messages %}
+    <div class="alert shadow-lg
+      {% if message.tags == 'error' %}alert-error
+      {% elif message.tags == 'success' %}alert-success
+      {% elif message.tags == 'warning' %}alert-warning
+      {% else %}alert-info{% endif %}
+      flex items-start gap-2 max-w-sm">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        {% if message.tags == 'success' %}
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        {% elif message.tags == 'error' %}
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        {% else %}
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        {% endif %}
+      </svg>
+      <span class="text-sm">{{ message }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  <script>
+    setTimeout(function() {
+      var toasts = document.getElementById('django-toasts');
+      if (toasts) {
+        toasts.style.transition = 'opacity 0.5s';
+        toasts.style.opacity = '0';
+        setTimeout(function() { toasts.remove(); }, 500);
+      }
+    }, 4000);
+  </script>
+  {% endif %}
+
   {% block content %}{% endblock %}
 
+  <!-- LOGOUT CONFIRMATION MODAL — available on every page -->
+  <dialog id="logout-modal" class="modal">
+    <div class="modal-box max-w-sm">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-full bg-error/15 flex items-center justify-center shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+        </div>
+        <div>
+          <h3 class="font-bold text-base">Log Out</h3>
+          <p class="text-sm text-base-content/50">Are you sure you want to log out?</p>
+        </div>
+      </div>
+      <div class="modal-action gap-2 mt-2">
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('logout-modal').close()">
+          Cancel
+        </button>
+        <a href="/logout/" class="btn btn-error btn-sm gap-1">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          Log Out
+        </a>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
+
   <script>
-    // Utility: open a DaisyUI modal by ID
-    function openModal(id) {
-      document.getElementById(id).showModal();
-    }
+    function openModal(id) { document.getElementById(id).showModal(); }
+    function closeModal(id) { document.getElementById(id).close(); }
 
-    // Utility: close a DaisyUI modal by ID
-    function closeModal(id) {
-      document.getElementById(id).close();
-    }
-
-    // Format markdown-ish text for display in chat bubbles
-    // LEARNING: Claude returns text with **bold**, `code`, numbered lists etc.
-    // This simple formatter makes those readable in the browser.
     function formatMessage(text) {
-      // Escape HTML first to prevent XSS
       let escaped = text
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
 
-      // Code blocks (``` ... ```)
-      escaped = escaped.replace(/```(\w*)\n?([\s\S]*?)```/g,
-        '<pre><code>$2</code></pre>');
-
-      // Inline code
+      escaped = escaped.replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
       escaped = escaped.replace(/`([^`]+)`/g, '<code>$1</code>');
-
-      // Bold (**text**)
       escaped = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-
-      // Italic (*text*)
       escaped = escaped.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-
-      // Paragraph breaks (double newline)
       escaped = escaped.replace(/\n\n/g, '</p><p>');
-
-      // Single line breaks
       escaped = escaped.replace(/\n/g, '<br>');
 
       return '<p>' + escaped + '</p>';

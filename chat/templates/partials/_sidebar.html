@@ -1,0 +1,114 @@
+{% load static %}
+<aside class="bg-base-200 w-72 min-h-full flex flex-col overflow-x-hidden">
+
+  <!-- Header / Logo -->
+  <div class="p-4 border-b border-base-300">
+    <a href="/chat/" class="flex items-center gap-3 hover:opacity-80 transition-opacity">
+      <img src="{% static 'images/ATS-LOGO.png' %}" alt="CyberGuide AI" class="w-8 h-8 object-contain shrink-0" />
+      <div>
+        <h2 class="font-bold text-lg text-primary leading-tight">CyberGuide AI</h2>
+        <p class="text-xs text-base-content/40">Cybersecurity Assistant</p>
+      </div>
+    </a>
+  </div>
+
+  <!-- New conversation button -->
+  <div class="p-3">
+    <a href="/chat/new/" class="btn btn-primary btn-sm w-full gap-2">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+      </svg>
+      New Conversation
+    </a>
+  </div>
+
+  <!-- Conversation list -->
+  <nav class="flex-1 overflow-y-auto px-2 pb-2">
+    {% if conversations %}
+    <p class="px-3 py-2 text-xs font-semibold text-base-content/40 uppercase tracking-wider">Conversations</p>
+    {% endif %}
+    <ul class="p-0 space-y-0.5 list-none">
+      {% for convo in conversations %}
+        <li class="relative group">
+          <a href="/chat/{{ convo.id }}/"
+             class="flex items-center gap-2 w-full py-2 pl-3 pr-8 rounded-lg hover:bg-base-300 transition-colors truncate {% if conversation.id == convo.id %}bg-base-300 text-primary font-medium{% endif %}">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-3 3v-3z" />
+            </svg>
+            <span class="truncate text-sm">{{ convo.title }}</span>
+          </a>
+          <!-- Delete trigger -->
+          <button type="button"
+                  onclick="document.getElementById('sidebar-delete-{{ convo.id }}').showModal()"
+                  title="Delete conversation"
+                  class="absolute right-1 top-1/2 -translate-y-1/2 btn btn-ghost btn-xs text-error p-1 h-auto min-h-0 opacity-0 group-hover:opacity-100 transition-opacity">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        </li>
+
+        <!-- Confirmation modal for this conversation -->
+        <dialog id="sidebar-delete-{{ convo.id }}" class="modal">
+          <div class="modal-box max-w-sm">
+            <h3 class="font-bold text-base mb-1">Delete Conversation?</h3>
+            <p class="text-sm text-base-content/60 mb-1 truncate">{{ convo.title }}</p>
+            <p class="text-xs text-base-content/40 mb-5">This cannot be undone.</p>
+            <div class="modal-action gap-2 mt-0">
+              <button class="btn btn-ghost btn-sm"
+                      onclick="document.getElementById('sidebar-delete-{{ convo.id }}').close()">
+                Cancel
+              </button>
+              <form method="post" action="/chat/{{ convo.id }}/delete/" class="inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-error btn-sm">Delete</button>
+              </form>
+            </div>
+          </div>
+          <form method="dialog" class="modal-backdrop"><button>close</button></form>
+        </dialog>
+      {% empty %}
+        <li>
+          <span class="px-3 py-4 text-base-content/30 text-sm italic cursor-default block text-center">
+            No conversations yet
+          </span>
+        </li>
+      {% endfor %}
+    </ul>
+  </nav>
+
+  <!-- Footer: admin link + user info -->
+  <div class="p-3 border-t border-base-300 space-y-1">
+
+    {% if request.user.is_staff %}
+    <a href="/users/" class="btn btn-ghost btn-sm w-full justify-start gap-2 text-base-content/60 hover:text-base-content">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+      </svg>
+      Manage Users
+    </a>
+    {% endif %}
+
+    <!-- User info row -->
+    <div class="flex items-center gap-2 px-1 py-1">
+      <a href="/profile/" class="flex items-center gap-2 flex-1 min-w-0 rounded-lg hover:bg-base-300 p-1 transition-colors">
+        <div class="w-8 h-8 rounded-full bg-primary text-primary-content flex items-center justify-center text-sm font-bold shrink-0">
+          {{ request.user.username|first|upper }}
+        </div>
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-medium truncate leading-tight">{{ request.user.username }}</p>
+          <p class="text-xs text-base-content/40 leading-tight">
+            {% if request.user.is_staff %}Admin{% else %}Member{% endif %}
+          </p>
+        </div>
+      </a>
+      <button onclick="document.getElementById('logout-modal').showModal()"
+              class="btn btn-ghost btn-xs text-error shrink-0" title="Log out">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+        </svg>
+      </button>
+    </div>
+
+  </div>
+</aside>
