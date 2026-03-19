@@ -5,7 +5,7 @@ db.sqlite3
 venv/
 staticfiles/
 node_modules/
-static/css/output.css
+# static/css/output.css  ← committed to repo so production servers don't need Node.js
 *.egg-info/
 dist/
 .DS_Store

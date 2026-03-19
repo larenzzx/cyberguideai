@@ -32,7 +32,12 @@ DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
 # LEARNING: ALLOWED_HOSTS is a security check. Django rejects requests
 # from hosts not in this list. In production, add your domain here.
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+_allowed = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1')
+ALLOWED_HOSTS = [h.strip() for h in _allowed.split(',') if h.strip()]
+
+# Required in Django 4+ when running behind HTTPS (e.g. PythonAnywhere)
+_origins = os.environ.get('CSRF_TRUSTED_ORIGINS', '')
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in _origins.split(',') if o.strip()]
 
 # Application definition
 # LEARNING: Django apps are modular components. Each one you create or
