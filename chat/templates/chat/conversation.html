@@ -1,0 +1,519 @@
+{% extends "base.html" %}
+{% load static %}
+
+<!--
+  CONVERSATION VIEW — The main chat interface
+
+  LEARNING: This is the most complex template. Key concepts:
+
+  1. DaisyUI drawer: sidebar (conversation list) + main content (chat)
+  2. chat chat-start / chat chat-end: message bubble components
+     - chat-start: left-aligned (AI messages)
+     - chat-end: right-aligned (user messages)
+  3. Fixed input bar at the bottom using CSS sticky positioning
+  4. AJAX fetch() to send messages without page reload
+  5. loading loading-dots: DaisyUI typing indicator while waiting for AI
+
+  The JavaScript at the bottom handles:
+  - Sending messages via fetch() (AJAX)
+  - Displaying the typing indicator
+  - Rendering the AI response with basic markdown formatting
+  - Auto-scrolling to the latest message
+  - Auto-resizing the textarea as the user types
+-->
+
+{% block title %}{{ conversation.title }} — CyberGuide AI{% endblock %}
+
+{% block content %}
+<div class="drawer lg:drawer-open">
+  <input id="sidebar-drawer" type="checkbox" class="drawer-toggle" />
+
+  <!-- MAIN CHAT AREA -->
+  <div class="drawer-content flex flex-col h-screen">
+
+    <!-- NAVBAR -->
+    <div class="navbar bg-base-300 sticky top-0 z-10 shadow-md flex-none">
+      <!-- Mobile hamburger -->
+      <div class="flex-none lg:hidden">
+        <label for="sidebar-drawer" class="btn btn-square btn-ghost">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-6 h-6 stroke-current">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+          </svg>
+        </label>
+      </div>
+
+      <!-- Conversation title (truncated) -->
+      <div class="flex-1 px-2 min-w-0">
+        <span class="text-sm font-medium truncate text-base-content/80">
+          {{ conversation.title }}
+        </span>
+      </div>
+
+      <!-- Right side: delete + user menu -->
+      <div class="flex-none flex items-center gap-2">
+        <!-- Delete conversation button -->
+        <form method="post" action="/chat/{{ conversation.id }}/delete/"
+              onsubmit="return confirm('Delete this conversation? This cannot be undone.')">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-ghost btn-sm text-error" title="Delete conversation">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        </form>
+
+        <!-- User avatar dropdown -->
+        <div class="dropdown dropdown-end">
+          <div tabindex="0" role="button" class="btn btn-ghost btn-circle">
+            <div class="bg-primary text-primary-content rounded-full w-8 flex items-center justify-center font-bold">
+              {{ request.user.username|first|upper }}
+            </div>
+          </div>
+          <ul tabindex="0" class="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-200 rounded-box w-48">
+            <li class="menu-title"><span>{{ request.user.username }}</span></li>
+            <li><a href="/chat/">All Conversations</a></li>
+            <li><a href="/logout/" class="text-error">Logout</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!--
+      MESSAGES AREA
+      LEARNING: overflow-y-auto + flex-1 makes this area scrollable.
+      The "anchor" div at the bottom is used by JavaScript to auto-scroll.
+      padding-bottom accounts for the fixed input bar height.
+    -->
+    <div id="messages-container" class="flex-1 overflow-y-auto chat-messages-container p-4 pb-32">
+
+      <!-- Welcome message if no messages yet -->
+      {% if not messages %}
+        <div class="flex flex-col items-center justify-center h-full text-center py-12">
+          <div class="text-6xl mb-4">🛡️</div>
+          <h2 class="text-2xl font-bold mb-3">How can I help you?</h2>
+          <p class="text-base-content/60 max-w-md mb-6">
+            I'm CyberGuide AI — your expert in cybersecurity, Microsoft 365,
+            phishing analysis, and more. Ask me anything.
+          </p>
+
+          <!-- Suggestion chips -->
+          <div class="flex flex-wrap gap-2 justify-center max-w-lg">
+            <button onclick="fillSuggestion('Analyze this email for phishing indicators')"
+                    class="btn btn-outline btn-sm">
+              🎣 Analyze phishing email
+            </button>
+            <button onclick="fillSuggestion('How do I provision a new user with a Cloud PC in M365?')"
+                    class="btn btn-outline btn-sm">
+              🖥️ Provision Cloud PC
+            </button>
+            <button onclick="fillSuggestion('What are the steps for setting up Conditional Access in Entra ID?')"
+                    class="btn btn-outline btn-sm">
+              🔐 Conditional Access setup
+            </button>
+            <button onclick="fillSuggestion('How do I configure DMARC, DKIM, and SPF for Exchange Online?')"
+                    class="btn btn-outline btn-sm">
+              📧 Email authentication
+            </button>
+          </div>
+        </div>
+      {% endif %}
+
+      <!-- Render existing messages from the database -->
+      {% for message in messages %}
+        {% if message.role == 'user' %}
+          <!-- USER MESSAGE: right-aligned with primary bubble -->
+          <div class="chat chat-end mb-4">
+            <div class="chat-image avatar">
+              <div class="w-8 rounded-full bg-primary flex items-center justify-center">
+                <span class="text-primary-content font-bold text-sm">
+                  {{ request.user.username|first|upper }}
+                </span>
+              </div>
+            </div>
+            <div class="chat-header mb-1 text-xs text-base-content/50">
+              {{ message.timestamp|date:"g:i A" }}
+            </div>
+            <div class="chat-bubble chat-bubble-primary">
+              {{ message.content }}
+            </div>
+          </div>
+        {% else %}
+          <!-- ASSISTANT MESSAGE: left-aligned with default bubble -->
+          <div class="chat chat-start mb-4">
+            <div class="chat-image avatar">
+              <div class="w-8 rounded-full bg-secondary flex items-center justify-center text-lg">
+                🛡️
+              </div>
+            </div>
+            <div class="chat-header mb-1 text-xs text-base-content/50">
+              CyberGuide AI · {{ message.timestamp|date:"g:i A" }}
+            </div>
+            <div class="chat-bubble">
+              <!--
+                LEARNING: |safe tells Django not to escape this HTML.
+                We only use it on content we've sanitized ourselves.
+                The formatMessage() function in base.html handles sanitization.
+                But for pre-existing DB content, we use the template tag below.
+              -->
+              {{ message.content|linebreaks }}
+            </div>
+          </div>
+        {% endif %}
+      {% endfor %}
+
+      <!--
+        TYPING INDICATOR — shown while waiting for Claude's response.
+        Hidden by default (hidden class), shown by JavaScript when message is sent.
+        LEARNING: DaisyUI's loading-dots is a pure CSS animated loader.
+      -->
+      <div id="typing-indicator" class="chat chat-start mb-4 hidden">
+        <div class="chat-image avatar">
+          <div class="w-8 rounded-full bg-secondary flex items-center justify-center text-lg">
+            🛡️
+          </div>
+        </div>
+        <div class="chat-bubble">
+          <span class="loading loading-dots loading-sm"></span>
+        </div>
+      </div>
+
+      <!-- Scroll anchor: JavaScript scrolls this into view after new messages -->
+      <div id="scroll-anchor"></div>
+    </div>
+
+    <!--
+      FIXED INPUT BAR
+      LEARNING: This bar stays at the bottom of the screen.
+      The join component groups the textarea and send button seamlessly.
+      Auto-resize JavaScript in the script block below handles textarea height.
+    -->
+    <div class="fixed bottom-0 left-0 right-0 lg:left-72 bg-base-300 border-t border-base-200 p-4 z-10">
+      <div class="max-w-4xl mx-auto">
+
+        <!-- Error message display area -->
+        <div id="error-message" class="alert alert-error mb-3 hidden">
+          <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span id="error-text"></span>
+        </div>
+
+        <!-- Message input form -->
+        <div class="join w-full shadow-lg">
+          <!--
+            LEARNING: The textarea uses a "join" with the button so they appear
+            as one unified input. Auto-resize is handled via JavaScript oninput.
+            Shift+Enter creates a new line; plain Enter submits the form.
+          -->
+          <textarea
+            id="message-input"
+            class="textarea textarea-bordered join-item flex-1 resize-none min-h-[52px] max-h-48 text-base leading-relaxed"
+            placeholder="Ask about cybersecurity, M365, phishing analysis..."
+            rows="1"
+          ></textarea>
+          <button
+            id="send-button"
+            class="btn btn-primary join-item px-6"
+            onclick="sendMessage()"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+            </svg>
+          </button>
+        </div>
+        <p class="text-xs text-base-content/40 mt-2 text-center">
+          Press Enter to send · Shift+Enter for new line
+        </p>
+      </div>
+    </div>
+
+  </div><!-- end drawer-content -->
+
+  <!-- SIDEBAR (same as home.html) -->
+  <div class="drawer-side z-20">
+    <label for="sidebar-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
+
+    <aside class="bg-base-200 w-72 min-h-full flex flex-col">
+      <!-- Sidebar header -->
+      <div class="p-4 border-b border-base-300">
+        <a href="/chat/" class="flex items-center gap-3 hover:opacity-80 transition-opacity">
+          <span class="text-2xl">🛡️</span>
+          <div>
+            <h2 class="font-bold text-lg text-primary">CyberGuide AI</h2>
+            <p class="text-xs text-base-content/50">Cybersecurity Assistant</p>
+          </div>
+        </a>
+      </div>
+
+      <!-- New chat button -->
+      <div class="p-3">
+        <a href="/chat/new/" class="btn btn-primary btn-sm w-full gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          New Conversation
+        </a>
+      </div>
+
+      <!-- All conversations list -->
+      <nav class="flex-1 overflow-y-auto p-2">
+        <ul class="menu menu-sm gap-1">
+          {% for convo in all_conversations %}
+            <li>
+              <a href="/chat/{{ convo.id }}/"
+                 class="truncate py-2 {% if convo.id == conversation.id %}active{% endif %}">
+                <span class="truncate">{{ convo.title }}</span>
+              </a>
+            </li>
+          {% empty %}
+            <li class="px-3 py-2 text-base-content/40 text-sm">No conversations yet</li>
+          {% endfor %}
+        </ul>
+      </nav>
+
+      <!-- Sidebar footer -->
+      <div class="p-4 border-t border-base-300">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="avatar placeholder">
+              <div class="bg-primary text-primary-content rounded-full w-8">
+                <span class="text-sm font-bold">{{ request.user.username|first|upper }}</span>
+              </div>
+            </div>
+            <span class="text-sm font-medium truncate max-w-[120px]">{{ request.user.username }}</span>
+          </div>
+          <a href="/logout/" class="btn btn-ghost btn-xs text-error">Logout</a>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+/*
+  CHAT JAVASCRIPT
+
+  LEARNING: This script handles the interactive parts of the chat UI.
+
+  Key concepts:
+
+  1. AJAX with fetch(): Instead of submitting a form (which reloads the page),
+     we use the browser's fetch() API to send/receive data as JSON.
+     This gives us a smooth, app-like experience.
+
+  2. CSRF token: Django requires a CSRF token on all POST requests (security).
+     We read it from the cookie that Django sets automatically.
+
+  3. Optimistic UI: We show the user's message immediately (before the API
+     responds), then append the AI response when it arrives.
+
+  4. Auto-scroll: After each message, we scroll to the bottom so the user
+     always sees the latest content.
+*/
+
+// Store the conversation ID from Django template
+const CONVERSATION_ID = {{ conversation.id }};
+
+// CSRF token utility — Django sets this cookie on all pages
+// LEARNING: fetch() doesn't include cookies by default on POST requests.
+// We must manually read and send the csrftoken cookie.
+function getCsrfToken() {
+  const name = 'csrftoken';
+  const cookies = document.cookie.split(';');
+  for (let cookie of cookies) {
+    const [key, val] = cookie.trim().split('=');
+    if (key === name) return decodeURIComponent(val);
+  }
+  return '';
+}
+
+// Auto-scroll to the bottom of the messages container
+function scrollToBottom() {
+  const anchor = document.getElementById('scroll-anchor');
+  if (anchor) {
+    anchor.scrollIntoView({ behavior: 'smooth' });
+  }
+}
+
+// Show an error message in the error bar
+function showError(message) {
+  const errorDiv = document.getElementById('error-message');
+  const errorText = document.getElementById('error-text');
+  errorText.textContent = message;
+  errorDiv.classList.remove('hidden');
+  // Auto-hide after 5 seconds
+  setTimeout(() => errorDiv.classList.add('hidden'), 5000);
+}
+
+// Append a new user message bubble to the chat
+function appendUserMessage(text) {
+  const container = document.getElementById('messages-container');
+  const anchor = document.getElementById('scroll-anchor');
+
+  const username = "{{ request.user.username|escapejs }}";
+  const initial = username.charAt(0).toUpperCase();
+
+  const div = document.createElement('div');
+  div.className = 'chat chat-end mb-4';
+  // LEARNING: We escape user input before inserting into DOM to prevent XSS.
+  // textContent does this automatically — never use innerHTML with user data.
+  div.innerHTML = `
+    <div class="chat-image avatar">
+      <div class="w-8 rounded-full bg-primary flex items-center justify-center">
+        <span class="text-primary-content font-bold text-sm">${initial}</span>
+      </div>
+    </div>
+    <div class="chat-header mb-1 text-xs text-base-content/50">Just now</div>
+    <div class="chat-bubble chat-bubble-primary"></div>
+  `;
+  // Use textContent for the user message — safe against XSS
+  div.querySelector('.chat-bubble').textContent = text;
+
+  container.insertBefore(div, anchor);
+}
+
+// Append a new assistant message bubble to the chat
+function appendAssistantMessage(text) {
+  const container = document.getElementById('messages-container');
+  const anchor = document.getElementById('scroll-anchor');
+
+  const div = document.createElement('div');
+  div.className = 'chat chat-start mb-4';
+  div.innerHTML = `
+    <div class="chat-image avatar">
+      <div class="w-8 rounded-full bg-secondary flex items-center justify-center text-lg">🛡️</div>
+    </div>
+    <div class="chat-header mb-1 text-xs text-base-content/50">
+      CyberGuide AI · Just now
+    </div>
+    <div class="chat-bubble"></div>
+  `;
+  // LEARNING: We use our formatMessage() function (defined in base.html)
+  // which sanitizes HTML before converting markdown to HTML.
+  div.querySelector('.chat-bubble').innerHTML = formatMessage(text);
+
+  container.insertBefore(div, anchor);
+}
+
+// Main function: send a message to the server
+async function sendMessage() {
+  const input = document.getElementById('message-input');
+  const sendButton = document.getElementById('send-button');
+  const typingIndicator = document.getElementById('typing-indicator');
+  const errorDiv = document.getElementById('error-message');
+
+  const messageText = input.value.trim();
+  if (!messageText) return;
+
+  // --- STEP 1: Optimistically show the user's message ---
+  appendUserMessage(messageText);
+  input.value = '';
+  input.style.height = 'auto'; // Reset textarea height
+
+  // Hide any previous errors
+  errorDiv.classList.add('hidden');
+
+  // --- STEP 2: Show the typing indicator ---
+  typingIndicator.classList.remove('hidden');
+  scrollToBottom();
+
+  // --- STEP 3: Disable the send button to prevent double-sending ---
+  sendButton.disabled = true;
+  sendButton.classList.add('loading');
+
+  try {
+    // --- STEP 4: Send the message to Django via AJAX ---
+    // LEARNING: We POST to /chat/<id>/send/ with:
+    //   - Content-Type: application/json (tells Django to expect JSON body)
+    //   - X-CSRFToken: the CSRF cookie value (required by Django)
+    //   - body: JSON with the message text
+    const response = await fetch(`/chat/${CONVERSATION_ID}/send/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrfToken(),
+      },
+      body: JSON.stringify({ message: messageText }),
+    });
+
+    // --- STEP 5: Parse the JSON response ---
+    const data = await response.json();
+
+    // --- STEP 6: Hide typing indicator ---
+    typingIndicator.classList.add('hidden');
+
+    if (data.error) {
+      // Show error message from the server
+      showError(data.error);
+    } else {
+      // --- STEP 7: Display the AI's response ---
+      appendAssistantMessage(data.response);
+
+      // Update page title to reflect conversation title
+      // (Title is set server-side after first message)
+      if (messageText.split(' ').length <= 6) {
+        // Rough heuristic: title likely changed
+        document.title = messageText.substring(0, 50) + '... — CyberGuide AI';
+      }
+    }
+
+  } catch (error) {
+    // Network error or JSON parse error
+    typingIndicator.classList.add('hidden');
+    showError('Network error. Please check your connection and try again.');
+    console.error('Fetch error:', error);
+  } finally {
+    // --- STEP 8: Re-enable the send button ---
+    sendButton.disabled = false;
+    sendButton.classList.remove('loading');
+    scrollToBottom();
+    input.focus();
+  }
+}
+
+// Fill suggestion text into the input field
+function fillSuggestion(text) {
+  const input = document.getElementById('message-input');
+  input.value = text;
+  input.focus();
+  autoResize(input);
+}
+
+// Auto-resize textarea as user types
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 192) + 'px'; // max 192px (max-h-48)
+}
+
+// ============================================================
+// EVENT LISTENERS — Set up after DOM is ready
+// ============================================================
+
+document.addEventListener('DOMContentLoaded', function() {
+  const input = document.getElementById('message-input');
+
+  // Auto-resize textarea on input
+  input.addEventListener('input', function() {
+    autoResize(this);
+  });
+
+  // Enter to send, Shift+Enter for new line
+  // LEARNING: event.key is the modern, cross-browser way to detect keys.
+  // event.shiftKey checks if Shift was held.
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault(); // Don't add a newline
+      sendMessage();
+    }
+  });
+
+  // Scroll to bottom on page load (show latest messages)
+  scrollToBottom();
+
+  // Focus the input field immediately
+  input.focus();
+});
+</script>
+{% endblock %}

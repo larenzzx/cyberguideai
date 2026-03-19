@@ -1,4 +1,16 @@
 @import "tailwindcss";
+
+/*
+  LEARNING: Tailwind v4 uses CSS-first configuration.
+  @source tells the Tailwind CLI which files to scan for class names.
+  Without this, compiled output.css won't include the DaisyUI/Tailwind
+  classes used in your templates (because v4 doesn't auto-detect them).
+
+  Paths are relative to THIS file (static/css/input.css).
+  ../../chat/templates/ → goes up two levels to project root, then into chat/templates/
+*/
+@source "../../chat/templates/**/*.html";
+
 @plugin "daisyui" {
   themes: night --default;
 }

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="night">
+{% load static %}
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}CyberGuide AI{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/output.css' %}" />
+
+  <style>
+    /* Smooth scrolling for the chat messages container */
+    .chat-messages-container {
+      scroll-behavior: smooth;
+    }
+    /* Auto-resize textarea reset */
+    textarea {
+      resize: none;
+      overflow: hidden;
+    }
+    /* Markdown-style formatting in chat bubbles */
+    .chat-bubble p { margin-bottom: 0.5rem; }
+    .chat-bubble p:last-child { margin-bottom: 0; }
+    .chat-bubble strong { font-weight: 700; }
+    .chat-bubble ul, .chat-bubble ol { padding-left: 1.2rem; margin-bottom: 0.5rem; }
+    .chat-bubble li { margin-bottom: 0.2rem; }
+    .chat-bubble code {
+      background: rgba(255,255,255,0.1);
+      padding: 0.1rem 0.3rem;
+      border-radius: 3px;
+      font-size: 0.875em;
+    }
+    .chat-bubble pre {
+      background: rgba(0,0,0,0.3);
+      padding: 0.75rem;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin: 0.5rem 0;
+    }
+    .chat-bubble pre code {
+      background: none;
+      padding: 0;
+    }
+  </style>
+
+  {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-base-100 text-base-content min-h-screen">
+
+  {% block content %}{% endblock %}
+
+  <script>
+    // Utility: open a DaisyUI modal by ID
+    function openModal(id) {
+      document.getElementById(id).showModal();
+    }
+
+    // Utility: close a DaisyUI modal by ID
+    function closeModal(id) {
+      document.getElementById(id).close();
+    }
+
+    // Format markdown-ish text for display in chat bubbles
+    // LEARNING: Claude returns text with **bold**, `code`, numbered lists etc.
+    // This simple formatter makes those readable in the browser.
+    function formatMessage(text) {
+      // Escape HTML first to prevent XSS
+      let escaped = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+      // Code blocks (``` ... ```)
+      escaped = escaped.replace(/```(\w*)\n?([\s\S]*?)```/g,
+        '<pre><code>$2</code></pre>');
+
+      // Inline code
+      escaped = escaped.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+      // Bold (**text**)
+      escaped = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+      // Italic (*text*)
+      escaped = escaped.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+      // Paragraph breaks (double newline)
+      escaped = escaped.replace(/\n\n/g, '</p><p>');
+
+      // Single line breaks
+      escaped = escaped.replace(/\n/g, '<br>');
+
+      return '<p>' + escaped + '</p>';
+    }
+  </script>
+
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

@@ -166,10 +166,11 @@ LOGIN_REDIRECT_URL = '/chat/'
 LOGOUT_REDIRECT_URL = '/login/'
 
 # =============================================================================
-# ANTHROPIC API CONFIGURATION
+# AI PROVIDER CONFIGURATION — GROQ
 # =============================================================================
 # LEARNING: We load the API key from the environment — never hardcode it.
-# The view will read it via os.environ.get('ANTHROPIC_API_KEY').
+# The view reads it directly via os.environ.get('GROQ_API_KEY').
+# Get a free API key (no credit card) at: https://console.groq.com/keys
 # =============================================================================
 
-ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
+GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')
