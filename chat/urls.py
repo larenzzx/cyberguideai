@@ -1,10 +1,9 @@
 from django.urls import path
-from django.views.generic import RedirectView
 from . import views
 
 urlpatterns = [
-    # Root redirect
-    path('', RedirectView.as_view(url='/chat/', permanent=False), name='root'),
+    # Root — guest landing / redirect to /chat/ if logged in
+    path('', views.guest_landing, name='root'),
 
     # Authentication
     path('register/', views.register_view, name='register'),
@@ -12,7 +11,10 @@ urlpatterns = [
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
 
-    # Chat
+    # Guest (no login required)
+    path('guest/send/', views.guest_send, name='guest_send'),
+
+    # Chat (login required)
     path('chat/', views.chat_home, name='chat_home'),
     path('chat/new/', views.new_conversation, name='new_conversation'),
     path('chat/<int:conversation_id>/', views.conversation_detail, name='conversation_detail'),

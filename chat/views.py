@@ -634,6 +634,9 @@ def login_view(request):
     if request.user.is_authenticated:
         return redirect('/chat/')
 
+    if request.GET.get('goodbye'):
+        messages.success(request, 'You have been logged out successfully.')
+
     account_pending = False
     if request.method == 'POST':
         form = AuthenticationForm(request, data=request.POST)
@@ -660,12 +663,84 @@ def login_view(request):
 
 def logout_view(request):
     logout(request)
-    return redirect('/login/')
+    return redirect('/login/?goodbye=1')
 
 
 # =============================================================================
 # CHAT VIEWS
 # =============================================================================
+
+def guest_landing(request):
+    """Root landing page — guests get the chat UI, logged-in users go to /chat/."""
+    if request.user.is_authenticated:
+        return redirect('/chat/')
+    return render(request, 'chat/guest_home.html')
+
+
+@require_POST
+def guest_send(request):
+    """Guest chat endpoint — no login required, no DB writes."""
+    try:
+        data = json.loads(request.body)
+        raw_messages = data.get('messages', [])
+
+        valid_roles = {'user', 'assistant'}
+        messages_for_api = [
+            {'role': m['role'], 'content': str(m['content'])}
+            for m in raw_messages[-10:]
+            if isinstance(m, dict) and m.get('role') in valid_roles and m.get('content')
+        ]
+
+        if not messages_for_api:
+            return JsonResponse({'error': 'No messages provided.'}, status=400)
+
+        api_key = os.environ.get('GROQ_API_KEY', '')
+        if not api_key:
+            return JsonResponse({
+                'error': 'API key not configured. Please set GROQ_API_KEY in your .env file.'
+            }, status=500)
+
+        client = groq.Groq(api_key=api_key)
+        response = client.chat.completions.create(
+            model='llama-3.3-70b-versatile',
+            max_tokens=2048,
+            messages=[
+                {'role': 'system', 'content': SYSTEM_PROMPT},
+                *messages_for_api
+            ]
+        )
+
+        assistant_text = response.choices[0].message.content or \
+            'I encountered an issue generating a response. Please try again.'
+        return JsonResponse({'response': assistant_text, 'error': None})
+
+    except groq.AuthenticationError:
+        return JsonResponse({
+            'error': 'Invalid API key. Please check your GROQ_API_KEY in .env.'
+        }, status=401)
+
+    except groq.RateLimitError:
+        return JsonResponse({
+            'error': 'CyberGuide AI is currently busy. Please wait a moment and try again.',
+            'rate_limited': True
+        }, status=429)
+
+    except groq.APIConnectionError:
+        return JsonResponse({
+            'error': 'Could not connect to the AI service. Please check your internet connection.'
+        }, status=503)
+
+    except groq.APIStatusError as e:
+        return JsonResponse({'error': f'AI service error: {e.message}'}, status=500)
+
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid request format.'}, status=400)
+
+    except Exception:
+        return JsonResponse({
+            'error': 'An unexpected error occurred. Please try again.'
+        }, status=500)
+
 
 @login_required
 def chat_home(request):
@@ -729,10 +804,10 @@ def send_message(request, conversation_id):
         if conversation.title == 'New Conversation':
             conversation.generate_title(user_message_text)
 
-        all_messages = conversation.messages.all().order_by('timestamp')
+        all_messages = conversation.messages.order_by('-timestamp')[:10]
         messages_for_api = [
             {'role': msg.role, 'content': msg.content}
-            for msg in all_messages
+            for msg in reversed(list(all_messages))
         ]
 
         api_key = os.environ.get('GROQ_API_KEY', '')
@@ -770,7 +845,8 @@ def send_message(request, conversation_id):
 
     except groq.RateLimitError:
         return JsonResponse({
-            'error': 'Rate limit reached. Please wait a moment and try again.'
+            'error': 'CyberGuide AI is currently busy. Please wait a moment and try again.',
+            'rate_limited': True
         }, status=429)
 
     except groq.APIConnectionError:
@@ -799,6 +875,7 @@ def delete_conversation(request, conversation_id):
         user=request.user
     )
     conversation.delete()
+    messages.success(request, 'Conversation deleted.')
     return redirect('/chat/')
 
 

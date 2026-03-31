@@ -1,0 +1,302 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}CyberGuide AI — Cybersecurity Assistant{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex flex-col bg-base-100">
+
+  <!-- NAVBAR -->
+  <nav class="navbar bg-base-300 sticky top-0 z-10 shadow-sm px-4">
+    <div class="flex-1 flex items-center gap-2">
+      <img src="{% static 'images/ATS-LOGO.png' %}" alt="CyberGuide AI" class="w-7 h-7 object-contain" />
+      <span class="font-bold text-lg text-primary">CyberGuide AI</span>
+    </div>
+    <div class="flex items-center gap-2">
+      <a href="/login/" class="btn btn-ghost btn-sm">Login</a>
+      <a href="/register/" class="btn btn-primary btn-sm">Sign Up</a>
+    </div>
+  </nav>
+
+  <!-- MAIN AREA -->
+  <main class="flex-1 overflow-y-auto" style="padding-bottom: 180px;" id="main-area">
+
+    <!-- WELCOME STATE — hidden after first message -->
+    <div id="welcome-state" class="flex flex-col items-center justify-center px-4 py-12" style="min-height: calc(100vh - 240px);">
+      <img src="{% static 'images/ATS-LOGO.png' %}" alt="CyberGuide AI" class="w-20 h-20 object-contain mb-5" />
+      <h1 class="text-3xl font-bold mb-2 text-center">Welcome to CyberGuide AI</h1>
+      <p class="text-base-content/50 text-base max-w-md text-center mb-10">
+        Your AI-powered cybersecurity expert. Ask about threats, M365, phishing analysis, and more.
+      </p>
+
+      <!-- Quick Start Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-xl">
+
+        <button onclick="fillSuggestion('I have a suspicious email I need you to analyze for phishing indicators. Please guide me through the analysis.')"
+                class="card bg-base-200 border border-base-300 hover:border-primary hover:bg-base-300 transition-all cursor-pointer group text-left">
+          <div class="card-body p-4 flex-row items-start gap-3">
+            <span class="text-2xl mt-0.5">🎣</span>
+            <div>
+              <h3 class="font-semibold text-sm group-hover:text-primary transition-colors">Phishing Analysis</h3>
+              <p class="text-xs text-base-content/40 mt-0.5 leading-relaxed">Analyze suspicious emails for indicators of compromise</p>
+            </div>
+          </div>
+        </button>
+
+        <button onclick="fillSuggestion('I need to provision a new Cloud PC for a new employee. Can you walk me through the full setup steps?')"
+                class="card bg-base-200 border border-base-300 hover:border-primary hover:bg-base-300 transition-all cursor-pointer group text-left">
+          <div class="card-body p-4 flex-row items-start gap-3">
+            <span class="text-2xl mt-0.5">🖥️</span>
+            <div>
+              <h3 class="font-semibold text-sm group-hover:text-primary transition-colors">Cloud PC Provisioning</h3>
+              <p class="text-xs text-base-content/40 mt-0.5 leading-relaxed">Step-by-step M365 new user setup workflow</p>
+            </div>
+          </div>
+        </button>
+
+        <button onclick="fillSuggestion('I need to offboard a user — block their sign-in and revoke all active sessions. What are the steps?')"
+                class="card bg-base-200 border border-base-300 hover:border-primary hover:bg-base-300 transition-all cursor-pointer group text-left">
+          <div class="card-body p-4 flex-row items-start gap-3">
+            <span class="text-2xl mt-0.5">🔐</span>
+            <div>
+              <h3 class="font-semibold text-sm group-hover:text-primary transition-colors">User Offboarding</h3>
+              <p class="text-xs text-base-content/40 mt-0.5 leading-relaxed">Block sign-in, revoke sessions, and MFA reset</p>
+            </div>
+          </div>
+        </button>
+
+        <button onclick="fillSuggestion('I need to grant a user access to another user\'s mailbox. Can you walk me through the steps?')"
+                class="card bg-base-200 border border-base-300 hover:border-primary hover:bg-base-300 transition-all cursor-pointer group text-left">
+          <div class="card-body p-4 flex-row items-start gap-3">
+            <span class="text-2xl mt-0.5">📧</span>
+            <div>
+              <h3 class="font-semibold text-sm group-hover:text-primary transition-colors">Mailbox Access</h3>
+              <p class="text-xs text-base-content/40 mt-0.5 leading-relaxed">Grant a user access to another user's inbox</p>
+            </div>
+          </div>
+        </button>
+
+      </div>
+    </div>
+
+    <!-- CHAT MESSAGES — shown after first message -->
+    <div id="chat-messages" class="hidden max-w-3xl mx-auto px-4 pt-6 space-y-2"></div>
+
+    <!-- TYPING INDICATOR -->
+    <div id="typing-indicator" class="hidden max-w-3xl mx-auto px-4 py-2">
+      <div class="chat chat-start">
+        <div class="chat-image avatar">
+          <div class="w-8 rounded-full overflow-hidden bg-base-300 flex items-center justify-center">
+            <img src="{% static 'images/ATS-LOGO.png' %}" class="w-6 h-6 object-contain" />
+          </div>
+        </div>
+        <div class="chat-bubble bg-base-200 text-base-content">
+          <span class="loading loading-dots loading-sm"></span>
+        </div>
+      </div>
+    </div>
+
+    <div id="scroll-anchor"></div>
+  </main>
+
+  <!-- FIXED INPUT BAR -->
+  <div class="fixed bottom-0 left-0 right-0 bg-base-300 border-t border-base-300/50 px-4 pt-3 pb-4 z-10">
+    <div class="max-w-3xl mx-auto">
+
+      <!-- Guest banner (dismissible) -->
+      <div id="guest-banner" class="alert alert-info mb-3 py-2 text-sm">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-4 w-4" fill="none" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>
+          You are chatting as a guest.
+          <a href="/login/" class="link link-neutral font-semibold">Log in</a> or
+          <a href="/register/" class="link link-neutral font-semibold">Sign up</a>
+          to save your conversations.
+        </span>
+        <button onclick="document.getElementById('guest-banner').remove()" class="btn btn-ghost btn-xs ml-auto">✕</button>
+      </div>
+
+      <!-- Error display -->
+      <div id="error-message" class="alert alert-error mb-3 hidden py-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span id="error-text" class="text-sm"></span>
+      </div>
+
+      <!-- Input container -->
+      <div class="bg-base-200 border border-base-300 rounded-2xl shadow-lg focus-within:border-primary transition-colors duration-150 px-4 pt-3 pb-2">
+        <textarea
+          id="message-input"
+          class="w-full bg-transparent resize-none outline-none text-base leading-relaxed"
+          style="max-height:200px; overflow-y:auto; min-height:28px;"
+          placeholder="Message CyberGuide AI... (Shift+Enter for new line)"
+          rows="1"
+        ></textarea>
+        <div class="flex justify-end pt-1">
+          <button id="send-button"
+                  class="btn btn-primary btn-circle btn-sm"
+                  onclick="sendMessage()">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// In-memory conversation — cleared on page refresh (intentional guest behavior)
+let guestMessages = [];
+
+function getCsrfToken() {
+  for (let cookie of document.cookie.split(';')) {
+    const [key, val] = cookie.trim().split('=');
+    if (key === 'csrftoken') return decodeURIComponent(val);
+  }
+  return '';
+}
+
+function scrollToBottom() {
+  document.getElementById('scroll-anchor').scrollIntoView({ behavior: 'smooth' });
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+}
+
+function showError(message, isWarning) {
+  const errorDiv = document.getElementById('error-message');
+  document.getElementById('error-text').textContent = message;
+  if (isWarning) {
+    errorDiv.classList.remove('alert-error');
+    errorDiv.classList.add('alert-warning');
+  } else {
+    errorDiv.classList.remove('alert-warning');
+    errorDiv.classList.add('alert-error');
+  }
+  errorDiv.classList.remove('hidden');
+  setTimeout(() => errorDiv.classList.add('hidden'), 8000);
+}
+
+function appendUserMessage(text) {
+  const container = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = 'chat chat-end';
+  div.innerHTML = `
+    <div class="chat-bubble bg-primary text-primary-content">
+      ${formatMessage(text)}
+    </div>`;
+  container.appendChild(div);
+  scrollToBottom();
+}
+
+function appendAssistantMessage(text) {
+  const container = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = 'chat chat-start';
+  div.innerHTML = `
+    <div class="chat-image avatar">
+      <div class="w-8 rounded-full overflow-hidden bg-base-300 flex items-center justify-center">
+        <img src="{% static 'images/ATS-LOGO.png' %}" class="w-6 h-6 object-contain" />
+      </div>
+    </div>
+    <div class="chat-bubble bg-base-200 text-base-content">
+      ${formatMessage(text)}
+    </div>`;
+  container.appendChild(div);
+  scrollToBottom();
+}
+
+function fillSuggestion(text) {
+  const input = document.getElementById('message-input');
+  input.value = text;
+  input.focus();
+  autoResize(input);
+}
+
+async function sendMessage() {
+  const input = document.getElementById('message-input');
+  const sendButton = document.getElementById('send-button');
+  const typingIndicator = document.getElementById('typing-indicator');
+
+  const messageText = input.value.trim();
+  if (!messageText) return;
+
+  // Transition welcome → chat on first message
+  const welcomeState = document.getElementById('welcome-state');
+  const chatMessages = document.getElementById('chat-messages');
+  if (!welcomeState.classList.contains('hidden')) {
+    welcomeState.classList.add('hidden');
+    chatMessages.classList.remove('hidden');
+  }
+
+  guestMessages.push({ role: 'user', content: messageText });
+  appendUserMessage(messageText);
+  input.value = '';
+  input.style.height = 'auto';
+  document.getElementById('error-message').classList.add('hidden');
+
+  // Move typing indicator to after the new user message, then show it
+  const anchor = document.getElementById('scroll-anchor');
+  anchor.parentNode.insertBefore(typingIndicator, anchor);
+  typingIndicator.classList.remove('hidden');
+  scrollToBottom();
+  sendButton.disabled = true;
+  sendButton.classList.add('loading');
+
+  try {
+    const response = await fetch('/guest/send/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrfToken(),
+      },
+      body: JSON.stringify({ messages: guestMessages }),
+    });
+
+    const data = await response.json();
+    typingIndicator.classList.add('hidden');
+
+    if (data.error) {
+      showError(data.error, data.rate_limited === true);
+      // Remove the user message from history so they can retry
+      guestMessages.pop();
+    } else {
+      guestMessages.push({ role: 'assistant', content: data.response });
+      appendAssistantMessage(data.response);
+    }
+
+  } catch (err) {
+    typingIndicator.classList.add('hidden');
+    showError('Network error. Please check your connection and try again.');
+    guestMessages.pop();
+  } finally {
+    sendButton.disabled = false;
+    sendButton.classList.remove('loading');
+    scrollToBottom();
+    input.focus();
+  }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  const input = document.getElementById('message-input');
+  input.addEventListener('input', function () { autoResize(this); });
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+  input.focus();
+});
+</script>
+{% endblock %}
