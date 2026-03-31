@@ -107,9 +107,7 @@
           <div class="chat-header mb-1 text-xs text-base-content/40">
             CyberGuide AI · {{ message.timestamp|date:"g:i A" }}
           </div>
-          <div class="chat-bubble max-w-2xl">
-            {{ message.content|linebreaks }}
-          </div>
+          <div class="chat-bubble max-w-2xl" data-raw="{{ message.content|escapejs }}"></div>
         </div>
         {% endif %}
       {% endfor %}
@@ -340,7 +338,139 @@ function autoResize(el) {
   el.style.height = Math.min(el.scrollHeight, 200) + 'px';
 }
 
+// ─── Markdown renderer (overrides base.html version) ────────────────────────
+function formatMessage(text) {
+  const blocks = [];
+
+  // 1. Extract code fences → placeholders so they aren't touched by later steps
+  let s = text.replace(/```[\w]*\n?([\s\S]*?)```/g, (_, code) => {
+    const i = blocks.length;
+    const esc = code.trim()
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    blocks.push(
+      `<pre class="bg-base-300 font-mono text-sm p-3 rounded-lg overflow-x-auto border border-base-content/10 my-2"><code>${esc}</code></pre>`
+    );
+    return `\x01BLK${i}\x01`;
+  });
+
+  // 2. HTML-escape the rest
+  s = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  // 3. Inline code
+  s = s.replace(/`([^`\n]+)`/g,
+    '<code class="bg-base-300 text-sm font-mono px-1 py-0.5 rounded">$1</code>');
+
+  // 4. Bold / italic
+  s = s
+    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+  // 5. Process line by line — headings, lists, hr, warnings
+  const lines = s.split('\n');
+  const out   = [];
+  let listTag  = null;
+  let listBuf  = [];
+
+  function flushList() {
+    if (!listTag) return;
+    const cls = listTag === 'ul'
+      ? 'list-disc pl-5 space-y-1 my-2'
+      : 'list-decimal pl-5 space-y-1 my-2';
+    out.push(`<${listTag} class="${cls}">${listBuf.join('')}</${listTag}>`);
+    listTag = null; listBuf = [];
+  }
+
+  for (const line of lines) {
+    const t = line.trim();
+
+    // Code-block placeholder — pass through untouched
+    if (/^\x01BLK\d+\x01$/.test(t)) { flushList(); out.push(t); continue; }
+
+    // Horizontal rule
+    if (/^-{3,}$/.test(t)) { flushList(); out.push('<hr class="border-base-content/20 my-3">'); continue; }
+
+    // Headings  ## / ###  (support up to ######)
+    const hm = t.match(/^(#{1,6})\s+(.+)$/);
+    if (hm) {
+      flushList();
+      const lvl = hm[1].length;
+      const szMap = ['text-2xl','text-xl','text-lg','text-base','text-sm','text-xs'];
+      out.push(`<h${lvl} class="font-bold ${szMap[lvl-1]} mb-2 mt-3">${hm[2]}</h${lvl}>`);
+      continue;
+    }
+
+    // Unordered list  -  *  •
+    const ulm = t.match(/^[-*•]\s+(.+)$/);
+    if (ulm) {
+      if (listTag === 'ol') flushList();
+      listTag = 'ul';
+      listBuf.push(`<li>${ulm[1]}</li>`);
+      continue;
+    }
+
+    // Ordered list  1.  2.
+    const olm = t.match(/^\d+\.\s+(.+)$/);
+    if (olm) {
+      if (listTag === 'ul') flushList();
+      listTag = 'ol';
+      listBuf.push(`<li>${olm[1]}</li>`);
+      continue;
+    }
+
+    // ⚠️ warning line
+    if (/^⚠️/.test(t)) {
+      flushList();
+      out.push(`<div class="alert alert-warning text-sm my-2 py-2">${t}</div>`);
+      continue;
+    }
+
+    // Empty line → paragraph break signal
+    if (t === '') { flushList(); out.push(''); continue; }
+
+    // Verdict badges on normal lines
+    const processed = t
+      .replace(/\bPHISHING\b/g,          '<span class="badge badge-error badge-sm">PHISHING</span>')
+      .replace(/\bSUSPICIOUS\b/g,         '<span class="badge badge-warning badge-sm">SUSPICIOUS</span>')
+      .replace(/\bLIKELY LEGITIMATE\b/g,  '<span class="badge badge-success badge-sm">LIKELY LEGITIMATE</span>');
+
+    flushList();
+    out.push(processed);
+  }
+  flushList();
+
+  // 6. Group non-block lines into <p>, leave block-level elements alone
+  let html = '';
+  let para = [];
+
+  function flushPara() {
+    if (!para.length) return;
+    html += `<p class="mb-2 leading-relaxed">${para.join('<br>')}</p>`;
+    para = [];
+  }
+
+  const isBlock = l => /^<(h[1-6]|ul|ol|pre|div|hr)/.test(l) || /^\x01BLK/.test(l);
+
+  for (const line of out) {
+    if (line === '')       { flushPara(); }
+    else if (isBlock(line)){ flushPara(); html += line; }
+    else                   { para.push(line); }
+  }
+  flushPara();
+
+  // 7. Restore code-fence blocks
+  blocks.forEach((b, i) => { html = html.split(`\x01BLK${i}\x01`).join(b); });
+
+  return html || `<p class="mb-2 leading-relaxed">${s}</p>`;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 document.addEventListener('DOMContentLoaded', function() {
+  // Format all assistant messages that were rendered from the database
+  document.querySelectorAll('[data-raw]').forEach(el => {
+    el.innerHTML = formatMessage(el.dataset.raw);
+  });
+
   const input = document.getElementById('message-input');
   input.addEventListener('input', function() { autoResize(this); });
   input.addEventListener('keydown', function(e) {
