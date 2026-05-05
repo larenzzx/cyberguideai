@@ -1,24 +1,30 @@
 {% load static %}
-<aside class="bg-base-200 w-72 min-h-full flex flex-col overflow-x-hidden">
+<aside class="bg-base-200 w-72 min-h-full flex flex-col overflow-x-hidden border-r border-primary/10">
 
   <!-- Header / Logo -->
-  <div class="p-4 border-b border-base-300">
+  <div class="p-4 border-b border-primary/10">
     <a href="/chat/" class="flex items-center gap-3 hover:opacity-80 transition-opacity">
-      <img src="{% static 'images/ATS-LOGO.png' %}" alt="CyberGuide AI" class="w-8 h-8 object-contain shrink-0" />
+      <img src="{% static 'images/cyberguideai-logo.png' %}" alt="CyberGuide AI" class="w-11 h-11 rounded-lg object-cover border border-cyan-400/20 shrink-0" />
       <div>
-        <h2 class="font-bold text-lg text-primary leading-tight">CyberGuide AI</h2>
-        <p class="text-xs text-base-content/40">Cybersecurity Assistant</p>
+        <h2 class="font-bold text-lg text-cyan-300 leading-tight">CyberGuide AI</h2>
+        <p class="text-xs text-base-content/50">SOC and IT operations</p>
       </div>
     </a>
   </div>
 
   <!-- New conversation button -->
-  <div class="p-3">
-    <a href="/chat/new/" class="btn btn-primary btn-sm w-full gap-2">
+  <div class="p-3 space-y-2">
+    <a href="/chat/new/" class="btn btn-primary btn-sm w-full gap-2 justify-start">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
       </svg>
       New Conversation
+    </a>
+    <a href="/threat-intelligence/" class="btn btn-ghost btn-sm w-full justify-start gap-2 text-base-content/70 hover:text-primary hover:bg-primary/10">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M12 3l7 4v5c0 5-3.5 8-7 9-3.5-1-7-4-7-9V7l7-4z" />
+      </svg>
+      Threat Intelligence
     </a>
   </div>
 
@@ -31,7 +37,7 @@
       {% for convo in conversations %}
         <li class="relative group">
           <a href="/chat/{{ convo.id }}/"
-             class="flex items-center gap-2 w-full py-2 pl-3 pr-8 rounded-lg hover:bg-base-300 transition-colors truncate {% if conversation.id == convo.id %}bg-base-300 text-primary font-medium{% endif %}">
+             class="flex items-center gap-2 w-full py-2 pl-3 pr-8 rounded-lg hover:bg-primary/10 transition-colors truncate {% if conversation.id == convo.id %}bg-primary/10 text-primary font-medium{% endif %}">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-3 3v-3z" />
             </svg>
@@ -78,7 +84,7 @@
   </nav>
 
   <!-- Footer: admin link + user info -->
-  <div class="p-3 border-t border-base-300 space-y-1">
+  <div class="p-3 border-t border-primary/10 space-y-1">
 
     {% if request.user.is_staff %}
     <a href="/users/" class="btn btn-ghost btn-sm w-full justify-start gap-2 text-base-content/60 hover:text-base-content">

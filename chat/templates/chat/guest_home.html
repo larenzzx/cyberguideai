@@ -7,12 +7,16 @@
 <div class="min-h-screen flex flex-col bg-base-100">
 
   <!-- NAVBAR -->
-  <nav class="navbar bg-base-300 sticky top-0 z-10 shadow-sm px-4">
-    <div class="flex-1 flex items-center gap-2">
-      <img src="{% static 'images/ATS-LOGO.png' %}" alt="CyberGuide AI" class="w-7 h-7 object-contain" />
-      <span class="font-bold text-lg text-primary">CyberGuide AI</span>
+  <nav class="navbar bg-base-200/95 border-b border-primary/10 sticky top-0 z-10 shadow-sm px-4">
+    <div class="flex-1 flex items-center gap-3 min-w-0">
+      <img src="{% static 'images/cyberguideai-logo.png' %}" alt="CyberGuide AI" class="w-9 h-9 rounded-lg object-cover border border-cyan-400/20 shrink-0" />
+      <div class="min-w-0">
+        <span class="font-bold text-lg text-cyan-300 block leading-tight">CyberGuide AI</span>
+        <span class="text-xs text-base-content/50 hidden sm:block">Security, networking, Microsoft, and helpdesk guidance</span>
+      </div>
     </div>
     <div class="flex items-center gap-2">
+      <a href="/threat-intelligence/" class="btn btn-ghost btn-sm">Threat Intel</a>
       <a href="/login/" class="btn btn-ghost btn-sm">Login</a>
       <a href="/register/" class="btn btn-primary btn-sm">Sign Up</a>
     </div>
@@ -23,55 +27,55 @@
 
     <!-- WELCOME STATE — hidden after first message -->
     <div id="welcome-state" class="flex flex-col items-center justify-center px-4 py-12" style="min-height: calc(100vh - 240px);">
-      <img src="{% static 'images/ATS-LOGO.png' %}" alt="CyberGuide AI" class="w-20 h-20 object-contain mb-5" />
-      <h1 class="text-3xl font-bold mb-2 text-center">Welcome to CyberGuide AI</h1>
-      <p class="text-base-content/50 text-base max-w-md text-center mb-10">
-        Your AI-powered cybersecurity expert. Ask about threats, M365, phishing analysis, and more.
+      <img src="{% static 'images/cyberguideai-logo.png' %}" alt="CyberGuide AI" class="w-24 h-24 rounded-2xl object-cover border border-cyan-400/20 shadow-lg mb-5" />
+      <h1 class="text-3xl font-bold mb-2 text-center">CyberGuide AI</h1>
+      <p class="text-base-content/60 text-base max-w-2xl text-center mb-10">
+        Practical guidance for security analysis, networking, Microsoft 365 administration, and IT support operations.
       </p>
 
       <!-- Quick Start Cards -->
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-xl">
 
-        <button onclick="fillSuggestion('I have a suspicious email I need you to analyze for phishing indicators. Please guide me through the analysis.')"
+        <button onclick="fillSuggestion('Analyze a suspicious email for phishing indicators. Tell me what details to collect and how to classify it safely.')"
                 class="card bg-base-200 border border-base-300 hover:border-primary hover:bg-base-300 transition-all cursor-pointer group text-left">
           <div class="card-body p-4 flex-row items-start gap-3">
             <span class="text-2xl mt-0.5">🎣</span>
             <div>
               <h3 class="font-semibold text-sm group-hover:text-primary transition-colors">Phishing Analysis</h3>
-              <p class="text-xs text-base-content/40 mt-0.5 leading-relaxed">Analyze suspicious emails for indicators of compromise</p>
+              <p class="text-xs text-base-content/40 mt-0.5 leading-relaxed">Triage sender, headers, links, attachments, and user risk</p>
             </div>
           </div>
         </button>
 
-        <button onclick="fillSuggestion('I need to provision a new Cloud PC for a new employee. Can you walk me through the full setup steps?')"
+        <button onclick="fillSuggestion('Help me troubleshoot a user who cannot connect to VPN. Give me a structured network troubleshooting checklist.')"
                 class="card bg-base-200 border border-base-300 hover:border-primary hover:bg-base-300 transition-all cursor-pointer group text-left">
           <div class="card-body p-4 flex-row items-start gap-3">
             <span class="text-2xl mt-0.5">🖥️</span>
             <div>
-              <h3 class="font-semibold text-sm group-hover:text-primary transition-colors">Cloud PC Provisioning</h3>
-              <p class="text-xs text-base-content/40 mt-0.5 leading-relaxed">Step-by-step M365 new user setup workflow</p>
+              <h3 class="font-semibold text-sm group-hover:text-primary transition-colors">Network Troubleshooting</h3>
+              <p class="text-xs text-base-content/40 mt-0.5 leading-relaxed">DNS, VPN, routing, firewall, and connectivity checks</p>
             </div>
           </div>
         </button>
 
-        <button onclick="fillSuggestion('I need to offboard a user — block their sign-in and revoke all active sessions. What are the steps?')"
+        <button onclick="fillSuggestion('Create a general SOC alert triage workflow for a suspicious sign-in or impossible travel alert.')"
                 class="card bg-base-200 border border-base-300 hover:border-primary hover:bg-base-300 transition-all cursor-pointer group text-left">
           <div class="card-body p-4 flex-row items-start gap-3">
             <span class="text-2xl mt-0.5">🔐</span>
             <div>
-              <h3 class="font-semibold text-sm group-hover:text-primary transition-colors">User Offboarding</h3>
-              <p class="text-xs text-base-content/40 mt-0.5 leading-relaxed">Block sign-in, revoke sessions, and MFA reset</p>
+              <h3 class="font-semibold text-sm group-hover:text-primary transition-colors">SOC Alert Triage</h3>
+              <p class="text-xs text-base-content/40 mt-0.5 leading-relaxed">Validate alerts, scope impact, contain, and document</p>
             </div>
           </div>
         </button>
 
-        <button onclick="fillSuggestion('I need to grant a user access to another user\'s mailbox. Can you walk me through the steps?')"
+        <button onclick="fillSuggestion('Give me general best-practice steps to troubleshoot a Microsoft 365 user who cannot access email.')"
                 class="card bg-base-200 border border-base-300 hover:border-primary hover:bg-base-300 transition-all cursor-pointer group text-left">
           <div class="card-body p-4 flex-row items-start gap-3">
             <span class="text-2xl mt-0.5">📧</span>
             <div>
-              <h3 class="font-semibold text-sm group-hover:text-primary transition-colors">Mailbox Access</h3>
-              <p class="text-xs text-base-content/40 mt-0.5 leading-relaxed">Grant a user access to another user's inbox</p>
+              <h3 class="font-semibold text-sm group-hover:text-primary transition-colors">Helpdesk / Microsoft 365</h3>
+              <p class="text-xs text-base-content/40 mt-0.5 leading-relaxed">General identity, mailbox, access, and client checks</p>
             </div>
           </div>
         </button>
@@ -87,7 +91,7 @@
       <div class="chat chat-start">
         <div class="chat-image avatar">
           <div class="w-8 rounded-full overflow-hidden bg-base-300 flex items-center justify-center">
-            <img src="{% static 'images/ATS-LOGO.png' %}" class="w-6 h-6 object-contain" />
+            <img src="{% static 'images/cyberguideai-logo.png' %}" alt="AI" class="w-8 h-8 object-cover" />
           </div>
         </div>
         <div class="chat-bubble bg-base-200 text-base-content">
@@ -206,7 +210,7 @@ function appendAssistantMessage(text) {
   div.innerHTML = `
     <div class="chat-image avatar">
       <div class="w-8 rounded-full overflow-hidden bg-base-300 flex items-center justify-center">
-        <img src="{% static 'images/ATS-LOGO.png' %}" class="w-6 h-6 object-contain" />
+        <img src="{% static 'images/cyberguideai-logo.png' %}" alt="AI" class="w-8 h-8 object-cover" />
       </div>
     </div>
     <div class="chat-bubble bg-base-200 text-base-content">

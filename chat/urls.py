@@ -14,6 +14,10 @@ urlpatterns = [
     # Guest (no login required)
     path('guest/send/', views.guest_send, name='guest_send'),
 
+    # Threat intelligence (available to guests and authenticated users)
+    path('threat-intelligence/', views.threat_intelligence, name='threat_intelligence'),
+    path('threat-intelligence/lookup/', views.threat_intelligence_lookup, name='threat_intelligence_lookup'),
+
     # Chat (login required)
     path('chat/', views.chat_home, name='chat_home'),
     path('chat/new/', views.new_conversation, name='new_conversation'),

@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Threat Intelligence Lookup - CyberGuide AI{% endblock %}
+
+{% block content %}
+{% if request.user.is_authenticated %}
+<div class="drawer lg:drawer-open">
+  <input id="sidebar-drawer" type="checkbox" class="drawer-toggle" />
+  <div class="drawer-content min-h-screen bg-base-100">
+    <div class="navbar bg-base-200/95 sticky top-0 z-10 border-b border-primary/10 px-4">
+      <div class="flex-none lg:hidden">
+        <label for="sidebar-drawer" class="btn btn-square btn-ghost">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-6 h-6 stroke-current">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+          </svg>
+        </label>
+      </div>
+      <div class="flex-1 px-2 flex items-center gap-3">
+        <img src="{% static 'images/cyberguideai-logo.png' %}" alt="CyberGuide AI" class="w-8 h-8 rounded-lg object-cover border border-cyan-400/20 lg:hidden" />
+        <h1 class="text-lg font-bold">Threat Intelligence Lookup</h1>
+      </div>
+      <a href="/profile/" title="Profile" class="w-9 h-9 rounded-full bg-primary text-primary-content flex items-center justify-center font-bold text-sm">
+        {{ request.user.username|first|upper }}
+      </a>
+    </div>
+    {% include "threat_intel/partials/_lookup_panel.html" %}
+  </div>
+  <div class="drawer-side z-20">
+    <label for="sidebar-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
+    {% include "partials/_sidebar.html" %}
+  </div>
+</div>
+{% else %}
+<div class="min-h-screen bg-base-100">
+  <nav class="navbar bg-base-200/95 sticky top-0 z-10 border-b border-primary/10 px-4">
+    <div class="flex-1 flex items-center gap-3">
+      <img src="{% static 'images/cyberguideai-logo.png' %}" alt="CyberGuide AI" class="w-9 h-9 rounded-lg object-cover border border-cyan-400/20" />
+      <a href="/" class="font-bold text-lg text-cyan-300">CyberGuide AI</a>
+    </div>
+    <div class="flex items-center gap-2">
+      <a href="/" class="btn btn-ghost btn-sm">Chat</a>
+      <a href="/login/" class="btn btn-ghost btn-sm">Login</a>
+      <a href="/register/" class="btn btn-primary btn-sm">Sign Up</a>
+    </div>
+  </nav>
+  {% include "threat_intel/partials/_lookup_panel.html" %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function getCsrfToken() {
+  for (let cookie of document.cookie.split(';')) {
+    const [key, val] = cookie.trim().split('=');
+    if (key === 'csrftoken') return decodeURIComponent(val);
+  }
+  const tokenInput = document.querySelector('[name=csrfmiddlewaretoken]');
+  if (tokenInput) return tokenInput.value;
+  return '';
+}
+
+function setLookupState(isLoading) {
+  const button = document.getElementById('lookup-button');
+  button.disabled = isLoading;
+  button.classList.toggle('loading', isLoading);
+}
+
+function showLookupError(message) {
+  const errorBox = document.getElementById('lookup-error');
+  document.getElementById('lookup-error-text').textContent = message;
+  errorBox.classList.remove('hidden');
+  document.getElementById('lookup-result').classList.add('hidden');
+}
+
+function verdictClass(verdict) {
+  if (verdict === 'Malicious') return 'badge-error';
+  if (verdict === 'Suspicious') return 'badge-warning';
+  if (verdict === 'Clean') return 'badge-success';
+  return 'badge-ghost';
+}
+
+function renderResult(result) {
+  document.getElementById('lookup-error').classList.add('hidden');
+  document.getElementById('lookup-result').classList.remove('hidden');
+  document.getElementById('result-indicator').textContent = result.indicator;
+  document.getElementById('result-type').textContent = result.indicator_type.replace('_', ' ');
+  document.getElementById('result-ratio').textContent = result.detection_ratio;
+  document.getElementById('result-reputation').textContent =
+    result.reputation === null || result.reputation === undefined ? 'Not reported' : result.reputation;
+  document.getElementById('result-summary').textContent = result.summary;
+
+  const verdict = document.getElementById('result-verdict');
+  verdict.textContent = result.verdict;
+  verdict.className = `badge ${verdictClass(result.verdict)} badge-lg`;
+
+  const categories = document.getElementById('result-categories');
+  categories.innerHTML = '';
+  if (result.categories.length) {
+    result.categories.forEach(function(category) {
+      const badge = document.createElement('span');
+      badge.className = 'badge badge-outline badge-sm';
+      badge.textContent = category;
+      categories.appendChild(badge);
+    });
+  } else {
+    const empty = document.createElement('span');
+    empty.className = 'text-sm text-base-content/40';
+    empty.textContent = 'No categories reported';
+    categories.appendChild(empty);
+  }
+
+  const stats = result.last_analysis_stats;
+  for (const key of ['malicious', 'suspicious', 'harmless', 'undetected', 'timeout']) {
+    document.getElementById(`stat-${key}`).textContent = stats[key] ?? 0;
+  }
+}
+
+async function lookupIndicator() {
+  const input = document.getElementById('indicator-input');
+  const indicator = input.value.trim();
+  if (!indicator) {
+    showLookupError('Enter an IP address, domain, URL, or file hash.');
+    return;
+  }
+
+  setLookupState(true);
+  try {
+    const response = await fetch('/threat-intelligence/lookup/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrfToken(),
+      },
+      body: JSON.stringify({ indicator }),
+    });
+    const data = await response.json();
+    if (!response.ok || data.error) {
+      showLookupError(data.error || 'Lookup failed. Please try again.');
+      return;
+    }
+    renderResult(data.result);
+  } catch (error) {
+    showLookupError('Network error. Please check your connection and try again.');
+  } finally {
+    setLookupState(false);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  const input = document.getElementById('indicator-input');
+  input.addEventListener('keydown', function(event) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      lookupIndicator();
+    }
+  });
+  input.focus();
+});
+</script>
+{% endblock %}

@@ -11,7 +11,7 @@
   <div class="drawer-content flex flex-col h-screen">
 
     <!-- NAVBAR -->
-    <div class="navbar bg-base-300 sticky top-0 z-10 shadow-sm flex-none px-4">
+    <div class="navbar bg-base-200/95 border-b border-primary/10 sticky top-0 z-10 shadow-sm flex-none px-4">
       <!-- Mobile hamburger -->
       <div class="flex-none lg:hidden">
         <label for="sidebar-drawer" class="btn btn-square btn-ghost">
@@ -32,6 +32,12 @@
 
       <!-- Right side actions -->
       <div class="flex-none flex items-center gap-1">
+        <a href="/threat-intelligence/" class="btn btn-ghost btn-sm hidden sm:flex gap-2" title="Threat Intelligence">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M12 3l7 4v5c0 5-3.5 8-7 9-3.5-1-7-4-7-9V7l7-4z" />
+          </svg>
+          Threat Intel
+        </a>
         <!-- Delete conversation -->
         <button onclick="document.getElementById('delete-modal').showModal()"
                 class="btn btn-ghost btn-sm text-error" title="Delete conversation">
@@ -54,28 +60,28 @@
       <!-- Welcome / empty state -->
       {% if not messages %}
       <div class="flex flex-col items-center justify-center h-full text-center py-12">
-        <img src="{% static 'images/ATS-LOGO.png' %}" alt="CyberGuide AI" class="w-20 h-20 object-contain mx-auto mb-5" />
+        <img src="{% static 'images/cyberguideai-logo.png' %}" alt="CyberGuide AI" class="w-20 h-20 rounded-2xl object-cover border border-cyan-400/20 shadow-lg mx-auto mb-5" />
         <h2 class="text-2xl font-bold mb-3">How can I help you?</h2>
-        <p class="text-base-content/50 max-w-md mb-8 leading-relaxed">
-          I'm CyberGuide AI — your expert in cybersecurity, Microsoft 365,
-          phishing analysis, and more. Ask me anything.
+        <p class="text-base-content/60 max-w-xl mb-8 leading-relaxed">
+          I'm CyberGuide AI, your guide for cybersecurity operations,
+          SOC operations, networking, Microsoft 365, and helpdesk troubleshooting.
         </p>
         <div class="flex flex-wrap gap-2 justify-center max-w-lg">
-          <button onclick="fillSuggestion('Analyze this email for phishing indicators')"
+          <button onclick="fillSuggestion('Analyze this email for phishing indicators and give me a safe triage workflow.')"
                   class="btn btn-outline btn-sm rounded-full">
-            🎣 Phishing analysis
+            Phishing analysis
           </button>
-          <button onclick="fillSuggestion('How do I provision a new user with a Cloud PC in M365?')"
+          <button onclick="fillSuggestion('Give me a structured checklist for troubleshooting DNS resolution issues.')"
                   class="btn btn-outline btn-sm rounded-full">
-            🖥️ Cloud PC provisioning
+            DNS troubleshooting
           </button>
-          <button onclick="fillSuggestion('What are the steps for setting up Conditional Access in Entra ID?')"
+          <button onclick="fillSuggestion('Create a general SOC alert triage workflow for suspicious sign-in activity.')"
                   class="btn btn-outline btn-sm rounded-full">
-            🔐 Conditional Access
+            SOC triage
           </button>
-          <button onclick="fillSuggestion('How do I configure DMARC, DKIM, and SPF for Exchange Online?')"
+          <button onclick="fillSuggestion('Give me general best-practice steps for troubleshooting Microsoft 365 mailbox access.')"
                   class="btn btn-outline btn-sm rounded-full">
-            📧 Email authentication
+            M365 helpdesk
           </button>
         </div>
       </div>
@@ -101,7 +107,7 @@
         <div class="chat chat-start mb-4">
           <div class="chat-image avatar">
             <div class="w-8 rounded-full overflow-hidden bg-base-300 flex items-center justify-center">
-                <img src="{% static 'images/ATS-LOGO.png' %}" alt="AI" class="w-6 h-6 object-contain" />
+                <img src="{% static 'images/cyberguideai-logo.png' %}" alt="AI" class="w-8 h-8 object-cover" />
               </div>
           </div>
           <div class="chat-header mb-1 text-xs text-base-content/40">
@@ -116,7 +122,7 @@
       <div id="typing-indicator" class="chat chat-start mb-4 hidden">
         <div class="chat-image avatar">
           <div class="w-8 h-8 rounded-full overflow-hidden bg-base-300 flex items-center justify-center">
-            <img src="{% static 'images/ATS-LOGO.png' %}" alt="AI" class="w-6 h-6 object-contain" />
+            <img src="{% static 'images/cyberguideai-logo.png' %}" alt="AI" class="w-8 h-8 object-cover" />
           </div>
         </div>
         <div class="chat-bubble">
@@ -259,7 +265,7 @@ function appendAssistantMessage(text) {
   div.innerHTML = `
     <div class="chat-image avatar">
       <div class="w-8 rounded-full overflow-hidden bg-base-300 flex items-center justify-center">
-        <img src="/static/images/ATS-LOGO.png" alt="AI" style="width:24px;height:24px;object-fit:contain;" />
+        <img src="{% static 'images/cyberguideai-logo.png' %}" alt="AI" class="w-8 h-8 object-cover" />
       </div>
     </div>
     <div class="chat-header mb-1 text-xs text-base-content/40">CyberGuide AI · Just now</div>
