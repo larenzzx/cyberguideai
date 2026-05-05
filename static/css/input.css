@@ -12,5 +12,67 @@
 @source "../../chat/templates/**/*.html";
 
 @plugin "daisyui" {
-  themes: night --default;
+  themes: cyberguide --default;
+}
+
+@plugin "daisyui/theme" {
+  name: "cyberguide";
+  default: true;
+  prefersdark: true;
+  color-scheme: dark;
+
+  --color-base-100: #080b12;
+  --color-base-200: #101622;
+  --color-base-300: #1a2232;
+  --color-base-content: #e5edf6;
+
+  --color-primary: #38bdf8;
+  --color-primary-content: #031522;
+  --color-secondary: #a78bfa;
+  --color-secondary-content: #120b2a;
+  --color-accent: #f59e0b;
+  --color-accent-content: #1d1200;
+  --color-neutral: #111827;
+  --color-neutral-content: #e5edf6;
+
+  --color-info: #60a5fa;
+  --color-info-content: #061225;
+  --color-success: #34d399;
+  --color-success-content: #03180f;
+  --color-warning: #fbbf24;
+  --color-warning-content: #211500;
+  --color-error: #fb7185;
+  --color-error-content: #26040a;
+
+  --radius-selector: 0.35rem;
+  --radius-field: 0.45rem;
+  --radius-box: 0.7rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+@layer base {
+  body {
+    background:
+      radial-gradient(circle at top left, rgba(56, 189, 248, 0.08), transparent 34rem),
+      linear-gradient(180deg, #080b12 0%, #0b1019 42%, #080b12 100%);
+  }
+}
+
+@layer components {
+  .navbar {
+    backdrop-filter: blur(14px);
+  }
+
+  .card,
+  .modal-box {
+    border-color: rgba(148, 163, 184, 0.14);
+  }
+
+  .chat-bubble {
+    border: 1px solid rgba(148, 163, 184, 0.12);
+  }
 }
