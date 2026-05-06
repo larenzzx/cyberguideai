@@ -75,4 +75,29 @@
   .chat-bubble {
     border: 1px solid rgba(148, 163, 184, 0.12);
   }
+
+  .input:focus,
+  .input:focus-within,
+  .textarea:focus,
+  textarea:focus,
+  select:focus {
+    outline: none !important;
+    outline-offset: 0;
+    box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.22);
+    border-color: rgba(56, 189, 248, 0.5);
+  }
+
+  .input:focus-visible,
+  .textarea:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: none !important;
+  }
+
+  .chat-composer textarea:focus,
+  .chat-composer textarea:focus-visible {
+    border-color: transparent;
+    box-shadow: none;
+    outline: none !important;
+  }
 }
