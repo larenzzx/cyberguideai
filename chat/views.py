@@ -6,7 +6,7 @@ import re
 import secrets
 import string
 from functools import wraps
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import groq
 import httpx
@@ -86,16 +86,20 @@ def _generate_password(length=14):
             return pwd
 
 
-def _get_virustotal_api_key():
-    api_key = os.environ.get('VIRUSTOTAL_API_KEY') or getattr(settings, 'VIRUSTOTAL_API_KEY', '')
+def _get_env_secret(name):
+    api_key = os.environ.get(name) or getattr(settings, name, '')
     if api_key:
         return api_key.strip()
 
     env_path = settings.BASE_DIR / '.env'
     if env_path.exists():
-        return (dotenv_values(env_path).get('VIRUSTOTAL_API_KEY') or '').strip()
+        return (dotenv_values(env_path).get(name) or '').strip()
 
     return ''
+
+
+def _get_virustotal_api_key():
+    return _get_env_secret('VIRUSTOTAL_API_KEY')
 
 
 _HASH_PATTERNS = {
@@ -201,6 +205,316 @@ def _summarize_virustotal_result(indicator_type, value, payload):
     }
 
 
+def _source_result(name, key, status, verdict='Unknown', metrics=None, summary=''):
+    return {
+        'name': name,
+        'key': key,
+        'status': status,
+        'verdict': verdict,
+        'metrics': metrics or [],
+        'summary': summary,
+    }
+
+
+def _metric(label, value):
+    if value is None or value == '':
+        value = 'Not reported'
+    return {'label': label, 'value': str(value)}
+
+
+def _handle_source_response(response, source_name, source_key):
+    if response.status_code in {401, 403}:
+        return _source_result(
+            source_name,
+            source_key,
+            'Error',
+            summary=f'{source_name} rejected the configured API key.',
+        )
+    if response.status_code == 429:
+        return _source_result(
+            source_name,
+            source_key,
+            'Error',
+            summary=f'{source_name} rate limit reached. Try again later.',
+        )
+    if response.status_code >= 400:
+        return _source_result(
+            source_name,
+            source_key,
+            'Error',
+            summary=f'{source_name} lookup failed with HTTP {response.status_code}.',
+        )
+    return None
+
+
+def _virustotal_source(client, indicator_type, value):
+    api_key = _get_virustotal_api_key()
+    if not api_key:
+        return _source_result(
+            'VirusTotal',
+            'virustotal',
+            'Error',
+            summary='VIRUSTOTAL_API_KEY is not configured.',
+        )
+
+    response = client.get(_virustotal_url(indicator_type, value), headers={
+        'x-apikey': api_key,
+        'accept': 'application/json',
+    })
+    if response.status_code == 404:
+        return _source_result(
+            'VirusTotal',
+            'virustotal',
+            'Clean',
+            'Unknown',
+            [_metric('Detection Ratio', '0/0'), _metric('Reputation', None)],
+            'VirusTotal does not have a report for this indicator.',
+        )
+    handled = _handle_source_response(response, 'VirusTotal', 'virustotal')
+    if handled:
+        return handled
+
+    result = _summarize_virustotal_result(indicator_type, value, response.json())
+    status = 'Found' if result['verdict'] in {'Malicious', 'Suspicious'} else 'Clean'
+    stats = result['last_analysis_stats']
+    metrics = [
+        _metric('Detection Ratio', result['detection_ratio']),
+        _metric('Reputation', result['reputation']),
+        _metric('Malicious', stats.get('malicious', 0)),
+        _metric('Suspicious', stats.get('suspicious', 0)),
+        _metric('Categories', ', '.join(result['categories']) if result['categories'] else None),
+    ]
+    return _source_result('VirusTotal', 'virustotal', status, result['verdict'], metrics, result['summary'])
+
+
+def _abuseipdb_verdict(score, reports):
+    if score >= 75 and reports > 0:
+        return 'Malicious'
+    if score >= 25 or reports >= 3:
+        return 'Suspicious'
+    if score == 0 and reports == 0:
+        return 'Clean'
+    return 'Unknown'
+
+
+def _abuseipdb_source(client, indicator_type, value):
+    if indicator_type != 'ip_address':
+        return _source_result(
+            'AbuseIPDB',
+            'abuseipdb',
+            'Not applicable',
+            summary='AbuseIPDB is used for IP address indicators only.',
+        )
+
+    api_key = _get_env_secret('ABUSEIPDB_API_KEY')
+    if not api_key:
+        return _source_result(
+            'AbuseIPDB',
+            'abuseipdb',
+            'Error',
+            summary='ABUSEIPDB_API_KEY is not configured.',
+        )
+
+    response = client.get(
+        'https://api.abuseipdb.com/api/v2/check',
+        headers={'Key': api_key, 'Accept': 'application/json'},
+        params={'ipAddress': value, 'maxAgeInDays': '90'},
+    )
+    handled = _handle_source_response(response, 'AbuseIPDB', 'abuseipdb')
+    if handled:
+        return handled
+
+    data = (response.json().get('data') or {})
+    score = int(data.get('abuseConfidenceScore') or 0)
+    reports = int(data.get('totalReports') or 0)
+    verdict = _abuseipdb_verdict(score, reports)
+    status = 'Found' if verdict in {'Malicious', 'Suspicious'} else 'Clean'
+    metrics = [
+        _metric('Abuse Confidence', f'{score}/100'),
+        _metric('Total Reports', reports),
+        _metric('Country Code', data.get('countryCode')),
+        _metric('ISP', data.get('isp')),
+        _metric('Usage Type', data.get('usageType')),
+        _metric('Last Reported', data.get('lastReportedAt')),
+    ]
+    summary = (
+        f'AbuseIPDB reports an abuse confidence score of {score}/100 with {reports} report(s) '
+        'in the last 90 days.'
+    )
+    return _source_result('AbuseIPDB', 'abuseipdb', status, verdict, metrics, summary)
+
+
+def _otx_indicator_path(indicator_type, value):
+    if indicator_type == 'ip_address':
+        version = ipaddress.ip_address(value).version
+        otx_type = 'IPv6' if version == 6 else 'IPv4'
+        return f'{otx_type}/{quote(value, safe="")}/general'
+    if indicator_type == 'domain':
+        return f'domain/{quote(value, safe="")}/general'
+    if indicator_type == 'url':
+        return f'url/{quote(value, safe="")}/general'
+    if indicator_type == 'file_hash':
+        return f'file/{quote(value, safe="")}/general'
+    return None
+
+
+def _otx_source(client, indicator_type, value):
+    api_key = _get_env_secret('OTX_API_KEY')
+    if not api_key:
+        return _source_result(
+            'AlienVault OTX',
+            'otx',
+            'Error',
+            summary='OTX_API_KEY is not configured.',
+        )
+
+    path = _otx_indicator_path(indicator_type, value)
+    if not path:
+        return _source_result(
+            'AlienVault OTX',
+            'otx',
+            'Not applicable',
+            summary='OTX does not support this indicator type in the current lookup.',
+        )
+
+    response = client.get(
+        f'https://otx.alienvault.com/api/v1/indicators/{path}',
+        headers={'X-OTX-API-KEY': api_key, 'Accept': 'application/json'},
+    )
+    if response.status_code == 404:
+        return _source_result(
+            'AlienVault OTX',
+            'otx',
+            'Clean',
+            'Unknown',
+            [_metric('Pulse Count', 0)],
+            'OTX does not have a general indicator record for this value.',
+        )
+    handled = _handle_source_response(response, 'AlienVault OTX', 'otx')
+    if handled:
+        return handled
+
+    payload = response.json()
+    pulse_info = payload.get('pulse_info') or {}
+    pulses = pulse_info.get('pulses') or []
+    pulse_count = int(pulse_info.get('count') or len(pulses) or 0)
+    reputation = payload.get('reputation') or payload.get('threat_score') or payload.get('validation')
+    threat_names = []
+    for pulse in pulses[:5]:
+        name = pulse.get('name')
+        if name:
+            threat_names.append(str(name))
+
+    if pulse_count >= 5:
+        verdict = 'Malicious'
+    elif pulse_count > 0 or reputation:
+        verdict = 'Suspicious'
+    else:
+        verdict = 'Clean'
+
+    metrics = [
+        _metric('Pulse Count', pulse_count),
+        _metric('Reputation', reputation),
+        _metric('Indicator Type', payload.get('type_title') or payload.get('type')),
+        _metric('Related Threats', ', '.join(threat_names) if threat_names else None),
+    ]
+    status = 'Found' if verdict in {'Malicious', 'Suspicious'} else 'Clean'
+    if threat_names:
+        summary = f'OTX has {pulse_count} related pulse(s), including {", ".join(threat_names[:3])}.'
+    elif pulse_count:
+        summary = f'OTX has {pulse_count} related pulse(s) for this indicator.'
+    else:
+        summary = 'OTX did not return related threat pulses for this indicator.'
+    return _source_result('AlienVault OTX', 'otx', status, verdict, metrics, summary)
+
+
+def _metric_value(source, label):
+    for item in source.get('metrics', []):
+        if item.get('label') == label:
+            return item.get('value')
+    return None
+
+
+def _parse_int(value):
+    if value is None:
+        return 0
+    match = re.search(r'-?\d+', str(value))
+    return int(match.group(0)) if match else 0
+
+
+def _combined_verdict(indicator_type, sources):
+    risk = 0
+    reasons = []
+    working_sources = [s for s in sources if s['status'] in {'Found', 'Clean'}]
+
+    vt = next((s for s in sources if s['key'] == 'virustotal'), None)
+    if vt and vt['status'] in {'Found', 'Clean'}:
+        ratio = _metric_value(vt, 'Detection Ratio') or '0/0'
+        bad = _parse_int(ratio.split('/')[0])
+        risk = max(risk, min(80, bad * 8))
+        if bad:
+            reasons.append(f'VirusTotal has {bad} malicious or suspicious detection(s)')
+        elif vt['verdict'] == 'Clean':
+            reasons.append('VirusTotal did not report malicious detections')
+
+    abuse = next((s for s in sources if s['key'] == 'abuseipdb'), None)
+    if abuse and abuse['status'] in {'Found', 'Clean'}:
+        score = _parse_int(_metric_value(abuse, 'Abuse Confidence'))
+        reports = _parse_int(_metric_value(abuse, 'Total Reports'))
+        risk = max(risk, score)
+        if score or reports:
+            reasons.append(f'AbuseIPDB shows {score}/100 confidence with {reports} report(s)')
+        elif indicator_type == 'ip_address':
+            reasons.append('AbuseIPDB shows no recent abuse reports')
+
+    otx = next((s for s in sources if s['key'] == 'otx'), None)
+    if otx and otx['status'] in {'Found', 'Clean'}:
+        pulse_count = _parse_int(_metric_value(otx, 'Pulse Count'))
+        if pulse_count >= 10:
+            risk = max(risk, 85)
+        elif pulse_count >= 5:
+            risk = max(risk, 70)
+        elif pulse_count > 0:
+            risk = max(risk, 45)
+        if pulse_count:
+            reasons.append(f'OTX links this indicator to {pulse_count} threat pulse(s)')
+        elif otx['verdict'] == 'Clean':
+            reasons.append('OTX did not return related threat pulses')
+
+    if not working_sources:
+        verdict = 'Unknown'
+        risk = 0
+        explanation = 'No configured source returned usable threat intelligence for this lookup.'
+        action = 'Configure at least one threat intelligence API key, then run the lookup again.'
+    elif risk >= 85:
+        verdict = 'Highly Malicious'
+        explanation = ', '.join(reasons) + '. Treat this as a high-confidence threat signal.'
+        action = 'Escalate immediately, search related logs, contain affected assets, and block the indicator if policy allows.'
+    elif risk >= 65:
+        verdict = 'Malicious'
+        explanation = ', '.join(reasons) + '. Multiple signals indicate malicious activity.'
+        action = 'Investigate related alerts and telemetry, scope exposure, and prepare blocking or containment.'
+    elif risk >= 35:
+        verdict = 'Suspicious'
+        explanation = ', '.join(reasons) + '. The indicator has suspicious signals but needs local validation.'
+        action = 'Correlate with proxy, DNS, endpoint, identity, and firewall logs before containment.'
+    elif all(s['verdict'] == 'Clean' for s in working_sources):
+        verdict = 'Clean'
+        explanation = ', '.join(reasons) + '. No source returned a malicious signal.'
+        action = 'No immediate containment based only on public intelligence; continue normal monitoring.'
+    else:
+        verdict = 'Unknown'
+        explanation = ', '.join(reasons) or 'The sources returned limited or inconclusive intelligence.'
+        action = 'Use internal telemetry and analyst review before making a containment decision.'
+
+    return {
+        'verdict': verdict,
+        'risk_score': max(0, min(100, risk)),
+        'explanation': explanation,
+        'recommended_action': action,
+    }
+
+
 # =============================================================================
 # AUTHENTICATION VIEWS
 # =============================================================================
@@ -283,7 +597,7 @@ def threat_intelligence(request):
 
 @require_POST
 def threat_intelligence_lookup(request):
-    """Server-side VirusTotal lookup. The API key never reaches the browser."""
+    """Server-side multi-source threat intelligence lookup. API keys never reach the browser."""
     try:
         data = json.loads(request.body)
     except json.JSONDecodeError:
@@ -296,62 +610,46 @@ def threat_intelligence_lookup(request):
             'error': 'Invalid indicator. Enter an IP address, domain, URL, MD5, SHA1, or SHA256 hash.'
         }, status=400)
 
-    api_key = _get_virustotal_api_key()
-    if not api_key:
-        return JsonResponse({
-            'error': 'VirusTotal API key not configured. Set VIRUSTOTAL_API_KEY in your .env file.'
-        }, status=500)
-
-    vt_url = _virustotal_url(indicator_type, normalized)
+    sources = []
     try:
         with httpx.Client(timeout=15.0) as client:
-            response = client.get(vt_url, headers={
-                'x-apikey': api_key,
-                'accept': 'application/json',
-            })
-
-        if response.status_code == 401:
-            return JsonResponse({'error': 'Invalid VirusTotal API key.'}, status=401)
-        if response.status_code == 404:
-            return JsonResponse({
-                'result': {
-                    'indicator': normalized,
-                    'indicator_type': indicator_type,
-                    'verdict': 'Unknown',
-                    'detection_ratio': '0/0',
-                    'reputation': None,
-                    'categories': [],
-                    'last_analysis_stats': {
-                        'malicious': 0,
-                        'suspicious': 0,
-                        'harmless': 0,
-                        'undetected': 0,
-                        'timeout': 0,
-                    },
-                    'summary': 'VirusTotal does not have a report for this indicator.',
-                }
-            })
-        if response.status_code == 429:
-            return JsonResponse({
-                'error': 'VirusTotal rate limit reached. Please wait and try again.'
-            }, status=429)
-        if response.status_code >= 400:
-            return JsonResponse({
-                'error': 'VirusTotal lookup failed. Please try again later.'
-            }, status=502)
-
-        return JsonResponse({
-            'result': _summarize_virustotal_result(
-                indicator_type,
-                normalized,
-                response.json()
-            )
-        })
-
+            source_meta = {
+                _virustotal_source: ('VirusTotal', 'virustotal'),
+                _abuseipdb_source: ('AbuseIPDB', 'abuseipdb'),
+                _otx_source: ('AlienVault OTX', 'otx'),
+            }
+            for lookup in (_virustotal_source, _abuseipdb_source, _otx_source):
+                try:
+                    sources.append(lookup(client, indicator_type, normalized))
+                except httpx.TimeoutException:
+                    source_name, source_key = source_meta[lookup]
+                    sources.append(_source_result(
+                        source_name,
+                        source_key,
+                        'Error',
+                        summary=f'{source_name} request timed out.',
+                    ))
+                except (httpx.RequestError, ValueError, KeyError):
+                    source_name, source_key = source_meta[lookup]
+                    sources.append(_source_result(
+                        source_name,
+                        source_key,
+                        'Error',
+                        summary=f'{source_name} lookup could not be completed.',
+                    ))
     except httpx.TimeoutException:
-        return JsonResponse({'error': 'VirusTotal request timed out.'}, status=504)
+        return JsonResponse({'error': 'Threat intelligence lookup timed out.'}, status=504)
     except httpx.RequestError:
-        return JsonResponse({'error': 'Could not connect to VirusTotal.'}, status=503)
+        return JsonResponse({'error': 'Could not connect to threat intelligence sources.'}, status=503)
+
+    return JsonResponse({
+        'result': {
+            'indicator': normalized,
+            'indicator_type': indicator_type,
+            'combined': _combined_verdict(indicator_type, sources),
+            'sources': sources,
+        }
+    })
 
 
 @require_POST
