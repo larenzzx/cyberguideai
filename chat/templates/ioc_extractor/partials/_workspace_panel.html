@@ -20,6 +20,21 @@
     </div>
   </section>
 
+  {% if is_guest_preview %}
+  <section class="alert alert-info mb-5 items-start">
+    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5 mt-0.5" fill="none" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+    <div class="text-sm">
+      <p class="font-semibold">Guest Preview</p>
+      <p class="text-base-content/70">
+        You can extract and group indicators. Sign in with an approved account to enrich indicators,
+        analyze all IOCs, and unlock full SOC investigation features.
+      </p>
+    </div>
+  </section>
+  {% endif %}
+
   <section class="rounded-lg bg-base-200 border border-base-300 shadow-sm overflow-hidden">
     <div class="border-b border-base-300 px-4 sm:px-5 py-4">
       <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">

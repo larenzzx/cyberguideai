@@ -62,6 +62,8 @@ const iocState = {
   enriched: new Map(),
   enriching: new Set(),
 };
+const isGuestPreview = {% if request.user.is_authenticated %}false{% else %}true{% endif %};
+const loginRequiredMessage = 'Sign in with an approved account to enrich indicators and unlock full SOC investigation features.';
 
 const groupLabels = {
   ip_addresses: 'IP Addresses',
@@ -122,9 +124,9 @@ function setExtractLoading(isLoading) {
 
 function setAnalyzeAllLoading(isLoading) {
   const button = document.getElementById('analyze-all-button');
-  button.disabled = isLoading || !iocState.extracted.length;
+  button.disabled = isLoading || !iocState.extracted.length || isGuestPreview;
   document.getElementById('analyze-all-spinner').classList.toggle('hidden', !isLoading);
-  document.getElementById('analyze-all-text').textContent = isLoading ? 'Analyzing' : 'Analyze All Indicators';
+  document.getElementById('analyze-all-text').textContent = isGuestPreview ? 'Login Required' : (isLoading ? 'Analyzing' : 'Analyze All Indicators');
 }
 
 function showWorkspaceError(message) {
@@ -210,7 +212,9 @@ function renderIocCard(item) {
   const isLoading = iocState.enriching.has(item.id);
   const verdict = enrichment?.combined?.verdict || 'Unknown';
   const risk = enrichment?.combined?.risk_score ?? 0;
-  const canAnalyze = item.group !== 'email_addresses';
+  const supportsEnrichment = item.group !== 'email_addresses';
+  const canAnalyze = supportsEnrichment && !isGuestPreview;
+  const analyzeLabel = isGuestPreview && supportsEnrichment ? 'Login required' : (isLoading ? '<span class="loading loading-spinner loading-xs"></span>Analyzing' : 'Analyze');
   return `
     <div class="flex flex-col gap-3">
       <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
@@ -225,12 +229,12 @@ function renderIocCard(item) {
         </div>
         <div class="flex items-center gap-2 shrink-0">
           <button type="button" class="btn btn-ghost btn-xs" onclick="copyIndicator('${escapeHTML(item.id)}')">Copy</button>
-          <button type="button" class="btn btn-primary btn-xs gap-1" ${canAnalyze && !isLoading ? '' : 'disabled'} onclick="analyzeIndicator('${escapeHTML(item.id)}')">
-            ${isLoading ? '<span class="loading loading-spinner loading-xs"></span>Analyzing' : 'Analyze'}
+          <button type="button" class="btn btn-primary btn-xs gap-1" ${canAnalyze && !isLoading ? '' : 'disabled'} onclick="analyzeIndicator('${escapeHTML(item.id)}')" title="${isGuestPreview && supportsEnrichment ? loginRequiredMessage : ''}">
+            ${analyzeLabel}
           </button>
         </div>
       </div>
-      ${enrichment ? renderEnrichment(enrichment) : canAnalyze ? '' : '<p class="text-xs text-base-content/40">Email addresses are extracted for investigation context, but threat enrichment is not enabled for this source set.</p>'}
+      ${enrichment ? renderEnrichment(enrichment) : supportsEnrichment ? (isGuestPreview ? `<p class="text-xs text-base-content/40">${loginRequiredMessage}</p>` : '') : '<p class="text-xs text-base-content/40">Email addresses are extracted for investigation context, but threat enrichment is not enabled for this source set.</p>'}
     </div>
   `;
 }
@@ -324,6 +328,10 @@ async function extractIndicators() {
 }
 
 async function analyzeIndicator(id) {
+  if (isGuestPreview) {
+    showWorkspaceError(loginRequiredMessage);
+    return;
+  }
   const item = iocState.extracted.find(function(candidate) { return candidate.id === id; });
   if (!item || iocState.enriching.has(id) || iocState.enriched.has(id)) return;
 
@@ -356,6 +364,10 @@ async function analyzeIndicator(id) {
 }
 
 async function analyzeAllIndicators() {
+  if (isGuestPreview) {
+    showWorkspaceError(loginRequiredMessage);
+    return;
+  }
   setAnalyzeAllLoading(true);
   const analyzable = iocState.extracted.filter(function(item) {
     return item.group !== 'email_addresses' && !iocState.enriched.has(item.id);

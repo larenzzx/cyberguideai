@@ -17,8 +17,9 @@
         <span class="text-xs text-base-content/50 hidden sm:block">Security, networking, Microsoft, and helpdesk guidance</span>
       </div>
     </div>
-    <div class="w-full sm:w-auto grid grid-cols-3 sm:flex items-center gap-2">
+    <div class="w-full sm:w-auto grid grid-cols-4 sm:flex items-center gap-2">
       <a href="/threat-intelligence/" class="btn btn-ghost btn-sm px-2 sm:px-3">Threat Intel</a>
+      <a href="/ioc-extractor/" class="btn btn-ghost btn-sm px-2 sm:px-3">IOC</a>
       <a href="/login/" class="btn btn-ghost btn-sm px-2 sm:px-3">Login</a>
       <a href="/register/" class="btn btn-primary btn-sm px-2 sm:px-3">Sign Up</a>
     </div>
@@ -116,6 +117,7 @@
         </svg>
         <span>
           You are chatting as a guest.
+          <span id="guest-chat-remaining">Limit: {{ guest_chat_limit }} prompts per day.</span>
           <a href="/login/" class="link link-neutral font-semibold">Log in</a> or
           <a href="/register/" class="link link-neutral font-semibold">Sign up</a>
           to save your conversations.
@@ -197,6 +199,12 @@ function showError(message, isWarning) {
   }
   errorDiv.classList.remove('hidden');
   setTimeout(() => errorDiv.classList.add('hidden'), 8000);
+}
+
+function updateGuestChatUsage(usage) {
+  const label = document.getElementById('guest-chat-remaining');
+  if (!label || !usage) return;
+  label.textContent = `${usage.remaining}/${usage.limit} guest prompts remaining today.`;
 }
 
 function appendUserMessage(text) {
@@ -283,6 +291,7 @@ async function sendMessage() {
       // Remove the user message from history so they can retry
       guestMessages.pop();
     } else {
+      updateGuestChatUsage(data.guest_usage);
       guestMessages.push({ role: 'assistant', content: data.response });
       appendAssistantMessage(data.response);
     }

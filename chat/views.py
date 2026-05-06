@@ -22,6 +22,7 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.contrib import messages
 from django.db.models import Count
 from django.http import JsonResponse
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 from dotenv import dotenv_values
 
@@ -123,6 +124,33 @@ _IPV4_CANDIDATE_PATTERN = re.compile(r'(?<!\d)(?:\d{1,3}\.){3}\d{1,3}(?!\d)')
 _DOMAIN_CANDIDATE_PATTERN = re.compile(
     r'(?<![@\w.-])(?:[A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}(?![\w.-])'
 )
+GUEST_CHAT_DAILY_LIMIT = 5
+GUEST_TI_DAILY_LIMIT = 3
+GUEST_LIMIT_MESSAGE = 'Guest limit reached. Please log in with an approved account to continue using full CyberGuide AI features.'
+LOGIN_REQUIRED_SOC_MESSAGE = 'Sign in with an approved account to enrich indicators and unlock full SOC investigation features.'
+
+
+def _daily_session_count(request, key):
+    today = timezone.localdate().isoformat()
+    usage = request.session.get(key)
+    if not isinstance(usage, dict) or usage.get('date') != today:
+        usage = {'date': today, 'count': 0}
+        request.session[key] = usage
+    return usage
+
+
+def _consume_guest_limit(request, key, limit):
+    if request.user.is_authenticated:
+        return True, 0, limit
+
+    usage = _daily_session_count(request, key)
+    if int(usage.get('count') or 0) >= limit:
+        return False, 0, limit
+
+    usage['count'] = int(usage.get('count') or 0) + 1
+    request.session[key] = usage
+    request.session.modified = True
+    return True, max(0, limit - usage['count']), limit
 
 
 def _detect_indicator(indicator):
@@ -769,12 +797,15 @@ def guest_landing(request):
     """Root landing page — guests get the chat UI, logged-in users go to /chat/."""
     if request.user.is_authenticated:
         return redirect('/chat/')
-    return render(request, 'chat/guest_home.html')
+    return render(request, 'chat/guest_home.html', {'guest_chat_limit': GUEST_CHAT_DAILY_LIMIT})
 
 
 def threat_intelligence(request):
     """Standalone threat intelligence lookup page for guests and users."""
-    context = {}
+    context = {
+        'guest_ti_limit': GUEST_TI_DAILY_LIMIT,
+        'is_guest_preview': not request.user.is_authenticated,
+    }
     if request.user.is_authenticated:
         context['conversations'] = Conversation.objects.filter(user=request.user)
     return render(request, 'threat_intel/lookup.html', context)
@@ -782,7 +813,9 @@ def threat_intelligence(request):
 
 def ioc_extractor(request):
     """SOC investigation workspace for extracting and enriching IOCs."""
-    context = {}
+    context = {
+        'is_guest_preview': not request.user.is_authenticated,
+    }
     if request.user.is_authenticated:
         context['conversations'] = Conversation.objects.filter(user=request.user)
     return render(request, 'ioc_extractor/workspace.html', context)
@@ -806,6 +839,12 @@ def ioc_extract(request):
 
 @require_POST
 def ioc_enrich(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'error': LOGIN_REQUIRED_SOC_MESSAGE,
+            'login_required': True,
+        }, status=403)
+
     try:
         data = json.loads(request.body)
     except json.JSONDecodeError:
@@ -854,6 +893,12 @@ def ioc_enrich(request):
 
 @require_POST
 def ioc_summary(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'error': LOGIN_REQUIRED_SOC_MESSAGE,
+            'login_required': True,
+        }, status=403)
+
     try:
         data = json.loads(request.body)
     except json.JSONDecodeError:
@@ -881,6 +926,15 @@ def threat_intelligence_lookup(request):
             'error': 'Invalid indicator. Enter an IP address, domain, URL, MD5, SHA1, or SHA256 hash.'
         }, status=400)
 
+    allowed, remaining, limit = _consume_guest_limit(request, 'guest_ti_lookup_usage', GUEST_TI_DAILY_LIMIT)
+    if not allowed:
+        return JsonResponse({
+            'error': GUEST_LIMIT_MESSAGE,
+            'guest_limit_reached': True,
+            'limit': limit,
+            'remaining': remaining,
+        }, status=429)
+
     try:
         result = _build_threat_intel_result(normalized)
     except httpx.TimeoutException:
@@ -888,7 +942,13 @@ def threat_intelligence_lookup(request):
     except httpx.RequestError:
         return JsonResponse({'error': 'Could not connect to threat intelligence sources.'}, status=503)
 
-    return JsonResponse({'result': result})
+    return JsonResponse({
+        'result': result,
+        'guest_usage': None if request.user.is_authenticated else {
+            'limit': limit,
+            'remaining': remaining,
+        },
+    })
 
 
 @require_POST
@@ -908,6 +968,16 @@ def guest_send(request):
         if not messages_for_api:
             return JsonResponse({'error': 'No messages provided.'}, status=400)
 
+        allowed, remaining, limit = _consume_guest_limit(request, 'guest_chat_usage', GUEST_CHAT_DAILY_LIMIT)
+        if not allowed:
+            return JsonResponse({
+                'error': GUEST_LIMIT_MESSAGE,
+                'rate_limited': True,
+                'guest_limit_reached': True,
+                'limit': limit,
+                'remaining': remaining,
+            }, status=429)
+
         api_key = os.environ.get('GROQ_API_KEY', '')
         if not api_key:
             return JsonResponse({
@@ -926,7 +996,14 @@ def guest_send(request):
 
         assistant_text = response.choices[0].message.content or \
             'I encountered an issue generating a response. Please try again.'
-        return JsonResponse({'response': assistant_text, 'error': None})
+        return JsonResponse({
+            'response': assistant_text,
+            'error': None,
+            'guest_usage': {
+                'limit': limit,
+                'remaining': remaining,
+            },
+        })
 
     except groq.AuthenticationError:
         return JsonResponse({
