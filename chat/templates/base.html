@@ -165,39 +165,6 @@
     (function() {
       if (!document.documentElement.classList.contains('chat-root')) return;
 
-      var frame = 0;
-      var lastHeight = 0;
-
-      function getViewportHeight() {
-        if (window.visualViewport && window.visualViewport.height) {
-          return Math.round(window.visualViewport.height);
-        }
-        return Math.round(window.innerHeight || document.documentElement.clientHeight || 0);
-      }
-
-      function applyViewportHeight() {
-        frame = 0;
-        var height = getViewportHeight();
-        if (!height || Math.abs(height - lastHeight) < 2) return;
-
-        lastHeight = height;
-        document.documentElement.style.setProperty('--chat-viewport-height', height + 'px');
-        document.body.style.setProperty('--chat-viewport-height', height + 'px');
-        window.dispatchEvent(new CustomEvent('chat:viewportchange', { detail: { height: height } }));
-      }
-
-      function scheduleViewportRefresh() {
-        if (frame) cancelAnimationFrame(frame);
-        frame = requestAnimationFrame(applyViewportHeight);
-      }
-
-      function settleViewport() {
-        scheduleViewportRefresh();
-        setTimeout(scheduleViewportRefresh, 60);
-        setTimeout(scheduleViewportRefresh, 180);
-        setTimeout(scheduleViewportRefresh, 360);
-      }
-
       function isTouchDevice() {
         return window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches;
       }
@@ -207,10 +174,9 @@
         shouldRefocusInput: function() {
           return !isTouchDevice();
         },
-        refreshViewport: scheduleViewportRefresh,
-        settleViewport: settleViewport,
+        refreshViewport: function() {},
+        settleViewport: function() {},
         scrollPaneToBottom: function(id, behavior) {
-          scheduleViewportRefresh();
           requestAnimationFrame(function() {
             var scroller = document.getElementById(id);
             if (!scroller) return;
@@ -221,26 +187,6 @@
           });
         }
       };
-
-      scheduleViewportRefresh();
-      window.addEventListener('resize', scheduleViewportRefresh, { passive: true });
-      window.addEventListener('orientationchange', scheduleViewportRefresh, { passive: true });
-      window.addEventListener('pageshow', scheduleViewportRefresh, { passive: true });
-      document.addEventListener('focusin', function(event) {
-        if (event.target && event.target.matches('textarea, input, select')) {
-          settleViewport();
-        }
-      });
-      document.addEventListener('focusout', function(event) {
-        if (event.target && event.target.matches('textarea, input, select')) {
-          settleViewport();
-        }
-      });
-
-      if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', scheduleViewportRefresh, { passive: true });
-        window.visualViewport.addEventListener('scroll', scheduleViewportRefresh, { passive: true });
-      }
     })();
   </script>
 

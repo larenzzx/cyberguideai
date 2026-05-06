@@ -106,7 +106,7 @@
   </main>
 
   <!-- INPUT BAR -->
-  <div class="flex-none bg-base-300 border-t border-base-300/50 px-4 pt-3 pb-4 z-10">
+  <div class="chat-input-bar flex-none bg-base-300 border-t border-base-300/50 px-3 pt-3 sm:px-4 z-10">
     <div class="max-w-3xl mx-auto">
 
       <!-- Guest banner (dismissible) -->
@@ -132,23 +132,21 @@
       </div>
 
       <!-- Input container -->
-      <div class="chat-composer bg-base-200 border border-base-300 rounded-2xl shadow-lg focus-within:border-primary transition-colors duration-150 px-4 pt-3 pb-2">
+      <div class="chat-composer bg-base-200 border border-base-300 rounded-2xl shadow-lg focus-within:border-primary transition-colors duration-150 p-2 flex items-end gap-2">
         <textarea
           id="message-input"
-          class="w-full bg-transparent resize-none outline-none text-base leading-relaxed"
-          style="max-height:200px; overflow-y:auto; min-height:28px;"
-          placeholder="Message CyberGuide AI... (Shift+Enter for new line)"
+          class="min-h-8 flex-1 bg-transparent resize-none outline-none text-base leading-relaxed px-2 py-1.5"
+          style="max-height:160px; overflow-y:auto;"
+          placeholder="Ask CyberGuide AI"
           rows="1"
         ></textarea>
-        <div class="flex justify-end pt-1">
-          <button id="send-button"
-                  class="btn btn-primary btn-circle btn-sm"
-                  onclick="sendMessage()">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-            </svg>
-          </button>
-        </div>
+        <button id="send-button"
+                class="btn btn-primary btn-circle btn-sm shrink-0 mb-0.5"
+                onclick="sendMessage()">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+          </svg>
+        </button>
       </div>
 
     </div>
@@ -180,12 +178,6 @@ function scrollToBottom() {
 function hasActiveChat() {
   const chatMessages = document.getElementById('chat-messages');
   return Boolean(chatMessages && !chatMessages.classList.contains('hidden'));
-}
-
-function refreshMobileViewport() {
-  if (window.CyberGuideChat) {
-    window.CyberGuideChat.settleViewport();
-  }
 }
 
 function autoResize(el) {
@@ -263,10 +255,6 @@ async function sendMessage() {
   appendUserMessage(messageText);
   input.value = '';
   input.style.height = 'auto';
-  if (window.CyberGuideChat && window.CyberGuideChat.isTouchDevice()) {
-    input.blur();
-    refreshMobileViewport();
-  }
   document.getElementById('error-message').classList.add('hidden');
 
   // Move typing indicator to after the new user message, then show it
@@ -309,8 +297,6 @@ async function sendMessage() {
     scrollToBottom();
     if (window.CyberGuideChat && window.CyberGuideChat.shouldRefocusInput()) {
       input.focus();
-    } else if (window.CyberGuideChat) {
-      refreshMobileViewport();
     }
   }
 }
@@ -318,18 +304,6 @@ async function sendMessage() {
 document.addEventListener('DOMContentLoaded', function () {
   const input = document.getElementById('message-input');
   input.addEventListener('input', function () { autoResize(this); });
-  input.addEventListener('focus', function () {
-    refreshMobileViewport();
-    if (hasActiveChat()) {
-      setTimeout(function () { scrollToBottom(); }, 220);
-    }
-  });
-  input.addEventListener('blur', function () {
-    refreshMobileViewport();
-    if (hasActiveChat()) {
-      setTimeout(function () { scrollToBottom(); }, 220);
-    }
-  });
   input.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -339,11 +313,6 @@ document.addEventListener('DOMContentLoaded', function () {
   if (window.CyberGuideChat && window.CyberGuideChat.shouldRefocusInput()) {
     input.focus();
   }
-  window.addEventListener('chat:viewportchange', function () {
-    if (window.CyberGuideChat && hasActiveChat()) {
-      window.CyberGuideChat.scrollPaneToBottom('main-area', 'auto');
-    }
-  });
   const mainArea = document.getElementById('main-area');
   if (mainArea) mainArea.scrollTop = 0;
 });
