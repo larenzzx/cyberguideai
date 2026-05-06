@@ -1,0 +1,417 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}IOC Extractor - CyberGuide AI{% endblock %}
+
+{% block content %}
+{% if request.user.is_authenticated %}
+<div class="drawer lg:drawer-open">
+  <input id="sidebar-drawer" type="checkbox" class="drawer-toggle" />
+  <div class="drawer-content min-h-[100svh] min-h-[100dvh] bg-base-100">
+    <div class="navbar bg-base-200/95 sticky top-0 z-10 border-b border-primary/10 px-4">
+      <div class="flex-none lg:hidden">
+        <label for="sidebar-drawer" class="btn btn-square btn-ghost">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-6 h-6 stroke-current">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+          </svg>
+        </label>
+      </div>
+      <div class="flex-1 px-2 flex items-center gap-3 min-w-0">
+        <img src="{% static 'images/cyberguideai-logo.png' %}" alt="CyberGuide AI" class="w-8 h-8 rounded-lg object-cover lg:hidden" />
+        <h1 class="text-lg font-bold truncate">IOC Extractor</h1>
+      </div>
+      <div class="flex items-center gap-1">
+        <a href="/threat-intelligence/" class="btn btn-ghost btn-sm hidden sm:flex">Threat Intel</a>
+        <a href="/profile/" title="Profile" class="w-9 h-9 rounded-full bg-primary text-primary-content flex items-center justify-center font-bold text-sm">
+          {{ request.user.username|first|upper }}
+        </a>
+      </div>
+    </div>
+    {% include "ioc_extractor/partials/_workspace_panel.html" %}
+  </div>
+  <div class="drawer-side z-20">
+    <label for="sidebar-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
+    {% include "partials/_sidebar.html" %}
+  </div>
+</div>
+{% else %}
+<div class="min-h-[100svh] min-h-[100dvh] bg-base-100">
+  <nav class="navbar bg-base-200/95 sticky top-0 z-10 border-b border-primary/10 px-4 py-2 flex-wrap gap-2 sm:flex-nowrap">
+    <div class="w-full sm:w-auto sm:flex-1 flex items-center gap-3 min-w-0">
+      <img src="{% static 'images/cyberguideai-logo.png' %}" alt="CyberGuide AI" class="w-9 h-9 rounded-lg object-cover shrink-0" />
+      <div class="min-w-0">
+        <a href="/" class="font-bold text-lg text-cyan-300 block leading-tight">CyberGuide AI</a>
+        <span class="text-xs text-base-content/50 hidden sm:block">SOC and IT operations workspace</span>
+      </div>
+    </div>
+    <div class="w-full sm:w-auto grid grid-cols-3 sm:flex items-center gap-2">
+      <a href="/" class="btn btn-ghost btn-sm px-2 sm:px-3">Chat</a>
+      <a href="/threat-intelligence/" class="btn btn-ghost btn-sm px-2 sm:px-3">Threat Intel</a>
+      <a href="/login/" class="btn btn-primary btn-sm px-2 sm:px-3">Login</a>
+    </div>
+  </nav>
+  {% include "ioc_extractor/partials/_workspace_panel.html" %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const iocState = {
+  extracted: [],
+  enriched: new Map(),
+  enriching: new Set(),
+};
+
+const groupLabels = {
+  ip_addresses: 'IP Addresses',
+  domains: 'Domains',
+  urls: 'URLs',
+  email_addresses: 'Email Addresses',
+  hashes: 'Hashes',
+};
+
+const groupHelp = {
+  ip_addresses: 'VirusTotal, AbuseIPDB, OTX',
+  domains: 'VirusTotal, OTX',
+  urls: 'VirusTotal, OTX',
+  email_addresses: 'Extraction only',
+  hashes: 'VirusTotal, OTX',
+};
+
+function getCsrfToken() {
+  for (let cookie of document.cookie.split(';')) {
+    const [key, val] = cookie.trim().split('=');
+    if (key === 'csrftoken') return decodeURIComponent(val);
+  }
+  const tokenInput = document.querySelector('[name=csrfmiddlewaretoken]');
+  return tokenInput ? tokenInput.value : '';
+}
+
+function escapeHTML(value) {
+  return String(value ?? '').replace(/[&<>"']/g, function(char) {
+    return {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    }[char];
+  });
+}
+
+function verdictClass(verdict) {
+  if (verdict === 'Highly Malicious' || verdict === 'Malicious') return 'badge-error';
+  if (verdict === 'Suspicious') return 'badge-warning';
+  if (verdict === 'Clean') return 'badge-success';
+  return 'badge-ghost';
+}
+
+function statusClass(status) {
+  if (status === 'Found') return 'badge-error';
+  if (status === 'Clean') return 'badge-success';
+  if (status === 'Not applicable') return 'badge-ghost';
+  return 'badge-warning';
+}
+
+function setExtractLoading(isLoading) {
+  document.getElementById('extract-button').disabled = isLoading;
+  document.getElementById('extract-spinner').classList.toggle('hidden', !isLoading);
+  document.getElementById('extract-text').textContent = isLoading ? 'Extracting' : 'Extract Indicators';
+}
+
+function setAnalyzeAllLoading(isLoading) {
+  const button = document.getElementById('analyze-all-button');
+  button.disabled = isLoading || !iocState.extracted.length;
+  document.getElementById('analyze-all-spinner').classList.toggle('hidden', !isLoading);
+  document.getElementById('analyze-all-text').textContent = isLoading ? 'Analyzing' : 'Analyze All Indicators';
+}
+
+function showWorkspaceError(message) {
+  const box = document.getElementById('workspace-error');
+  document.getElementById('workspace-error-text').textContent = message;
+  box.classList.remove('hidden');
+}
+
+function clearWorkspaceError() {
+  document.getElementById('workspace-error').classList.add('hidden');
+}
+
+function flattenGroups(groups) {
+  const output = [];
+  Object.keys(groupLabels).forEach(function(groupKey) {
+    (groups[groupKey] || []).forEach(function(item) {
+      output.push({ ...item, group: groupKey, id: `${groupKey}:${item.value.toLowerCase()}` });
+    });
+  });
+  return output;
+}
+
+function renderExtraction(result) {
+  const groups = result.groups || {};
+  iocState.extracted = flattenGroups(groups);
+  iocState.enriched.clear();
+  iocState.enriching.clear();
+  document.getElementById('ioc-count').textContent = `${result.total || 0} indicator(s)`;
+  document.getElementById('summary-card').classList.add('hidden');
+
+  const container = document.getElementById('ioc-groups');
+  container.innerHTML = '';
+
+  if (!iocState.extracted.length) {
+    container.innerHTML = `
+      <div class="card bg-base-200 border border-base-300">
+        <div class="card-body p-5 text-center text-base-content/50">
+          No indicators were detected. Try pasting alerts, logs, URLs, hashes, or email content.
+        </div>
+      </div>
+    `;
+    document.getElementById('results-section').classList.remove('hidden');
+    setAnalyzeAllLoading(false);
+    return;
+  }
+
+  Object.keys(groupLabels).forEach(function(groupKey) {
+    const items = groups[groupKey] || [];
+    if (!items.length) return;
+    const card = document.createElement('section');
+    card.className = 'card bg-base-200 border border-base-300 shadow-sm';
+    card.innerHTML = `
+      <div class="card-body p-5">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+          <div>
+            <h2 class="card-title text-base">${groupLabels[groupKey]}</h2>
+            <p class="text-xs text-base-content/40 mt-1">${groupHelp[groupKey]}</p>
+          </div>
+          <span class="badge badge-outline">${items.length}</span>
+        </div>
+        <div class="space-y-3" id="group-${groupKey}"></div>
+      </div>
+    `;
+    container.appendChild(card);
+
+    const list = card.querySelector(`#group-${groupKey}`);
+    items.forEach(function(item) {
+      const id = `${groupKey}:${item.value.toLowerCase()}`;
+      const row = document.createElement('article');
+      row.id = `ioc-card-${btoa(unescape(encodeURIComponent(id))).replace(/=+$/, '')}`;
+      row.className = 'rounded-lg bg-base-300 border border-base-content/10 p-3 min-w-0';
+      row.innerHTML = renderIocCard({ ...item, group: groupKey, id });
+      list.appendChild(row);
+    });
+  });
+
+  document.getElementById('results-section').classList.remove('hidden');
+  setAnalyzeAllLoading(false);
+}
+
+function renderIocCard(item) {
+  const enrichment = iocState.enriched.get(item.id);
+  const isLoading = iocState.enriching.has(item.id);
+  const verdict = enrichment?.combined?.verdict || 'Unknown';
+  const risk = enrichment?.combined?.risk_score ?? 0;
+  const canAnalyze = item.group !== 'email_addresses';
+  return `
+    <div class="flex flex-col gap-3">
+      <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div class="min-w-0">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="badge badge-outline badge-sm">${escapeHTML(item.subtype)}</span>
+            <span class="badge ${verdictClass(verdict)} badge-sm">${escapeHTML(verdict)}</span>
+            ${enrichment?.cached ? '<span class="badge badge-ghost badge-sm">Cached</span>' : ''}
+          </div>
+          <p class="font-mono text-sm break-all mt-2">${escapeHTML(item.value)}</p>
+          ${enrichment ? `<p class="text-xs text-base-content/50 mt-1">Risk score: ${risk}/100</p>` : ''}
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button type="button" class="btn btn-ghost btn-xs" onclick="copyIndicator('${escapeHTML(item.id)}')">Copy</button>
+          <button type="button" class="btn btn-primary btn-xs gap-1" ${canAnalyze && !isLoading ? '' : 'disabled'} onclick="analyzeIndicator('${escapeHTML(item.id)}')">
+            ${isLoading ? '<span class="loading loading-spinner loading-xs"></span>Analyzing' : 'Analyze'}
+          </button>
+        </div>
+      </div>
+      ${enrichment ? renderEnrichment(enrichment) : canAnalyze ? '' : '<p class="text-xs text-base-content/40">Email addresses are extracted for investigation context, but threat enrichment is not enabled for this source set.</p>'}
+    </div>
+  `;
+}
+
+function renderEnrichment(result) {
+  const combined = result.combined || {};
+  const sources = (result.sources || []).map(function(source) {
+    const metrics = (source.metrics || []).map(function(metric) {
+      return `
+        <div class="rounded-md bg-base-200 p-2 border border-base-content/10">
+          <p class="text-xs uppercase tracking-wider text-base-content/40">${escapeHTML(metric.label)}</p>
+          <p class="text-xs font-semibold break-words mt-1">${escapeHTML(metric.value)}</p>
+        </div>
+      `;
+    }).join('');
+    return `
+      <details class="collapse collapse-arrow bg-base-200 border border-base-content/10">
+        <summary class="collapse-title min-h-0 py-3 text-sm font-semibold">
+          <span>${escapeHTML(source.name)}</span>
+          <span class="badge ${statusClass(source.status)} badge-sm ml-2">${escapeHTML(source.status)}</span>
+          <span class="badge ${verdictClass(source.verdict)} badge-sm ml-1">${escapeHTML(source.verdict)}</span>
+        </summary>
+        <div class="collapse-content">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">${metrics || '<p class="text-xs text-base-content/40">No metrics returned.</p>'}</div>
+          <p class="text-xs text-base-content/60">${escapeHTML(source.summary)}</p>
+        </div>
+      </details>
+    `;
+  }).join('');
+
+  return `
+    <div class="rounded-lg border border-primary/15 bg-base-100 p-3">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
+        <div class="rounded-md bg-base-200 p-3">
+          <p class="text-xs uppercase tracking-wider text-base-content/40">Combined Verdict</p>
+          <span class="badge ${verdictClass(combined.verdict)} mt-2">${escapeHTML(combined.verdict || 'Unknown')}</span>
+        </div>
+        <div class="rounded-md bg-base-200 p-3">
+          <p class="text-xs uppercase tracking-wider text-base-content/40">Risk Score</p>
+          <p class="font-bold text-xl mt-1">${combined.risk_score ?? 0}/100</p>
+        </div>
+        <div class="rounded-md bg-base-200 p-3">
+          <p class="text-xs uppercase tracking-wider text-base-content/40">SOC Action</p>
+          <p class="text-xs text-base-content/70 mt-1">${escapeHTML(combined.recommended_action || '')}</p>
+        </div>
+      </div>
+      <p class="text-xs text-base-content/70 mb-3">${escapeHTML(combined.explanation || '')}</p>
+      <div class="space-y-2">${sources}</div>
+    </div>
+  `;
+}
+
+function refreshIocCard(id) {
+  const item = iocState.extracted.find(function(candidate) { return candidate.id === id; });
+  if (!item) return;
+  const elementId = `ioc-card-${btoa(unescape(encodeURIComponent(id))).replace(/=+$/, '')}`;
+  const card = document.getElementById(elementId);
+  if (card) card.innerHTML = renderIocCard(item);
+}
+
+async function extractIndicators() {
+  const textarea = document.getElementById('ioc-input');
+  const text = textarea.value.trim();
+  if (!text) {
+    showWorkspaceError('Paste alerts, logs, emails, or incident notes first.');
+    return;
+  }
+
+  clearWorkspaceError();
+  setExtractLoading(true);
+  try {
+    const response = await fetch('/ioc-extractor/extract/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrfToken(),
+      },
+      body: JSON.stringify({ text }),
+    });
+    const data = await response.json();
+    if (!response.ok || data.error) {
+      showWorkspaceError(data.error || 'Indicator extraction failed.');
+      return;
+    }
+    renderExtraction(data.result);
+  } catch (error) {
+    showWorkspaceError('Network error during indicator extraction.');
+  } finally {
+    setExtractLoading(false);
+  }
+}
+
+async function analyzeIndicator(id) {
+  const item = iocState.extracted.find(function(candidate) { return candidate.id === id; });
+  if (!item || iocState.enriching.has(id) || iocState.enriched.has(id)) return;
+
+  iocState.enriching.add(id);
+  refreshIocCard(id);
+  clearWorkspaceError();
+  try {
+    const response = await fetch('/ioc-extractor/enrich/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrfToken(),
+      },
+      body: JSON.stringify({ indicator: item.value, lookup_value: item.lookup_value }),
+    });
+    const data = await response.json();
+    if (!response.ok || data.error) {
+      showWorkspaceError(data.error || `Could not analyze ${item.value}.`);
+      return;
+    }
+    iocState.enriched.set(id, data.result);
+    refreshIocCard(id);
+    await updateSummary();
+  } catch (error) {
+    showWorkspaceError(`Network error while analyzing ${item.value}.`);
+  } finally {
+    iocState.enriching.delete(id);
+    refreshIocCard(id);
+  }
+}
+
+async function analyzeAllIndicators() {
+  setAnalyzeAllLoading(true);
+  const analyzable = iocState.extracted.filter(function(item) {
+    return item.group !== 'email_addresses' && !iocState.enriched.has(item.id);
+  });
+
+  for (const item of analyzable) {
+    await analyzeIndicator(item.id);
+  }
+  await updateSummary();
+  setAnalyzeAllLoading(false);
+}
+
+async function updateSummary() {
+  const results = Array.from(iocState.enriched.values());
+  if (!results.length) return;
+
+  try {
+    const response = await fetch('/ioc-extractor/summary/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrfToken(),
+      },
+      body: JSON.stringify({ results }),
+    });
+    const data = await response.json();
+    if (response.ok && data.summary) {
+      document.getElementById('summary-text').textContent = data.summary;
+      document.getElementById('summary-card').classList.remove('hidden');
+    }
+  } catch (error) {
+    // Summary is supporting context only; enrichment results remain usable.
+  }
+}
+
+function clearWorkspace() {
+  document.getElementById('ioc-input').value = '';
+  document.getElementById('results-section').classList.add('hidden');
+  document.getElementById('summary-card').classList.add('hidden');
+  document.getElementById('ioc-groups').innerHTML = '';
+  document.getElementById('ioc-count').textContent = '0 indicators';
+  iocState.extracted = [];
+  iocState.enriched.clear();
+  iocState.enriching.clear();
+  clearWorkspaceError();
+  setAnalyzeAllLoading(false);
+}
+
+function copyIndicator(id) {
+  const item = iocState.extracted.find(function(candidate) { return candidate.id === id; });
+  if (!item) return;
+  navigator.clipboard.writeText(item.value).catch(function() {});
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  setAnalyzeAllLoading(false);
+});
+</script>
+{% endblock %}

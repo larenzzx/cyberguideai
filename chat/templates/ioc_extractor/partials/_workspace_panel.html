@@ -1,0 +1,123 @@
+<main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+  <form class="hidden">{% csrf_token %}</form>
+
+  <section class="mb-6">
+    <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-widest text-primary">SOC investigation workspace</p>
+        <h1 class="text-3xl font-bold mt-1">IOC Extractor</h1>
+        <p class="text-base-content/60 max-w-3xl mt-2">
+          Paste raw alerts, logs, phishing emails, PowerShell commands, firewall events, or investigation notes.
+          CyberGuide AI will extract indicators and enrich them with configured threat intelligence sources.
+        </p>
+      </div>
+      <div class="stats stats-vertical sm:stats-horizontal bg-base-200 border border-base-300 shadow-none">
+        <div class="stat py-3 px-4">
+          <div class="stat-title text-xs">Extracted</div>
+          <div id="ioc-count" class="stat-value text-xl">0 indicators</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="rounded-lg bg-base-200 border border-base-300 shadow-sm overflow-hidden">
+    <div class="border-b border-base-300 px-4 sm:px-5 py-4">
+      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2">
+            <div class="w-9 h-9 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M4 12h10M4 17h7m6-5l2 2 4-4" />
+              </svg>
+            </div>
+            <div class="min-w-0">
+              <h2 class="font-bold leading-tight">Raw Investigation Text</h2>
+              <p class="text-sm text-base-content/50 truncate">Paste one alert, full email, command output, or mixed incident notes.</p>
+            </div>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          <span class="badge badge-outline badge-sm">IPv4</span>
+          <span class="badge badge-outline badge-sm">Domains</span>
+          <span class="badge badge-outline badge-sm">URLs</span>
+          <span class="badge badge-outline badge-sm">Emails</span>
+          <span class="badge badge-outline badge-sm">Hashes</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="p-4 sm:p-5">
+      <label class="form-control">
+        <span class="sr-only">Raw Investigation Text</span>
+        <div class="rounded-lg bg-base-100 border border-base-300 focus-within:border-primary/60 transition-colors overflow-hidden">
+          <div class="flex items-center justify-between gap-3 px-3 py-2 border-b border-base-300 bg-base-300/40">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="w-2 h-2 rounded-full bg-error/70 shrink-0"></span>
+              <span class="w-2 h-2 rounded-full bg-warning/70 shrink-0"></span>
+              <span class="w-2 h-2 rounded-full bg-success/70 shrink-0"></span>
+              <span class="text-xs text-base-content/40 font-mono truncate">investigation-input.txt</span>
+            </div>
+            <span class="text-xs text-base-content/40 hidden sm:inline">Server-side extraction</span>
+          </div>
+          <textarea
+            id="ioc-input"
+            class="textarea w-full min-h-64 sm:min-h-80 leading-relaxed font-mono text-sm resize-y bg-transparent border-0 rounded-none focus:outline-none focus:border-0"
+            placeholder="Paste alerts, logs, phishing emails, PowerShell commands, or raw investigation text..."
+            spellcheck="false"
+          ></textarea>
+        </div>
+      </label>
+
+      <div id="workspace-error" class="alert alert-error mt-4 hidden">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span id="workspace-error-text" class="text-sm"></span>
+      </div>
+
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4">
+        <p class="text-xs text-base-content/40">
+          Duplicates are removed before enrichment to reduce unnecessary API calls.
+        </p>
+        <div class="flex flex-col sm:flex-row gap-2 sm:justify-end">
+        <button id="extract-button" type="button" class="btn btn-primary gap-2 sm:min-w-44" onclick="extractIndicators()">
+          <span id="extract-spinner" class="loading loading-spinner loading-xs hidden"></span>
+          <span id="extract-text">Extract Indicators</span>
+        </button>
+        <button type="button" class="btn btn-ghost" onclick="clearWorkspace()">Clear</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="results-section" class="hidden mt-6 space-y-5">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div>
+        <h2 class="text-xl font-bold">Extracted Indicators</h2>
+        <p class="text-sm text-base-content/50">Analyze indicators individually or run a controlled sequential enrichment.</p>
+      </div>
+      <button id="analyze-all-button" type="button" class="btn btn-outline gap-2" onclick="analyzeAllIndicators()">
+        <span id="analyze-all-spinner" class="loading loading-spinner loading-xs hidden"></span>
+        <span id="analyze-all-text">Analyze All Indicators</span>
+      </button>
+    </div>
+
+    <div id="summary-card" class="card bg-base-200 border border-primary/20 shadow-sm hidden">
+      <div class="card-body p-5">
+        <div class="flex items-start gap-3">
+          <div class="w-10 h-10 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2a4 4 0 014-4h5M9 7h.01M5 7h.01M5 12h.01M5 17h.01M9 12h.01M13 7h6M13 17h6" />
+            </svg>
+          </div>
+          <div>
+            <h3 class="font-bold">AI Investigation Summary</h3>
+            <p id="summary-text" class="text-sm text-base-content/70 mt-2 leading-relaxed"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="ioc-groups" class="grid grid-cols-1 xl:grid-cols-2 gap-5"></div>
+  </section>
+</main>

@@ -17,6 +17,10 @@ urlpatterns = [
     # Threat intelligence (available to guests and authenticated users)
     path('threat-intelligence/', views.threat_intelligence, name='threat_intelligence'),
     path('threat-intelligence/lookup/', views.threat_intelligence_lookup, name='threat_intelligence_lookup'),
+    path('ioc-extractor/', views.ioc_extractor, name='ioc_extractor'),
+    path('ioc-extractor/extract/', views.ioc_extract, name='ioc_extract'),
+    path('ioc-extractor/enrich/', views.ioc_enrich, name='ioc_enrich'),
+    path('ioc-extractor/summary/', views.ioc_summary, name='ioc_summary'),
 
     # Chat (login required)
     path('chat/', views.chat_home, name='chat_home'),
