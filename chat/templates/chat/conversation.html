@@ -227,6 +227,12 @@ function scrollToBottom() {
   }
 }
 
+function refreshMobileViewport() {
+  if (window.CyberGuideChat) {
+    window.CyberGuideChat.settleViewport();
+  }
+}
+
 function showError(message, isWarning) {
   const errorDiv = document.getElementById('error-message');
   document.getElementById('error-text').textContent = message;
@@ -298,7 +304,7 @@ async function sendMessage() {
   input.style.height = 'auto';
   if (window.CyberGuideChat && window.CyberGuideChat.isTouchDevice()) {
     input.blur();
-    window.CyberGuideChat.refreshViewport();
+    refreshMobileViewport();
   }
   errorDiv.classList.add('hidden');
 
@@ -340,7 +346,7 @@ async function sendMessage() {
     if (window.CyberGuideChat && window.CyberGuideChat.shouldRefocusInput()) {
       input.focus();
     } else if (window.CyberGuideChat) {
-      window.CyberGuideChat.refreshViewport();
+      refreshMobileViewport();
     }
   }
 }
@@ -500,16 +506,12 @@ document.addEventListener('DOMContentLoaded', function() {
   const input = document.getElementById('message-input');
   input.addEventListener('input', function() { autoResize(this); });
   input.addEventListener('focus', function() {
-    if (window.CyberGuideChat) {
-      window.CyberGuideChat.refreshViewport();
-      setTimeout(function() { scrollToBottom(); }, 180);
-    }
+    refreshMobileViewport();
+    setTimeout(function() { scrollToBottom(); }, 220);
   });
   input.addEventListener('blur', function() {
-    if (window.CyberGuideChat) {
-      window.CyberGuideChat.refreshViewport();
-      setTimeout(function() { scrollToBottom(); }, 180);
-    }
+    refreshMobileViewport();
+    setTimeout(function() { scrollToBottom(); }, 220);
   });
   input.addEventListener('keydown', function(e) {
     if (e.key === 'Enter' && !e.shiftKey) {

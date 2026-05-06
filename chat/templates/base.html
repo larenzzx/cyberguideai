@@ -3,7 +3,7 @@
 {% load static %}
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
   <title>{% block title %}CyberGuide AI{% endblock %}</title>
   <link rel="icon" type="image/png" href="{% static 'images/cyberguideai-logo.png' %}" />
   <link rel="stylesheet" href="{% static 'css/output.css' %}" />
@@ -191,6 +191,13 @@
         frame = requestAnimationFrame(applyViewportHeight);
       }
 
+      function settleViewport() {
+        scheduleViewportRefresh();
+        setTimeout(scheduleViewportRefresh, 60);
+        setTimeout(scheduleViewportRefresh, 180);
+        setTimeout(scheduleViewportRefresh, 360);
+      }
+
       function isTouchDevice() {
         return window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches;
       }
@@ -201,6 +208,7 @@
           return !isTouchDevice();
         },
         refreshViewport: scheduleViewportRefresh,
+        settleViewport: settleViewport,
         scrollPaneToBottom: function(id, behavior) {
           scheduleViewportRefresh();
           requestAnimationFrame(function() {
@@ -218,6 +226,16 @@
       window.addEventListener('resize', scheduleViewportRefresh, { passive: true });
       window.addEventListener('orientationchange', scheduleViewportRefresh, { passive: true });
       window.addEventListener('pageshow', scheduleViewportRefresh, { passive: true });
+      document.addEventListener('focusin', function(event) {
+        if (event.target && event.target.matches('textarea, input, select')) {
+          settleViewport();
+        }
+      });
+      document.addEventListener('focusout', function(event) {
+        if (event.target && event.target.matches('textarea, input, select')) {
+          settleViewport();
+        }
+      });
 
       if (window.visualViewport) {
         window.visualViewport.addEventListener('resize', scheduleViewportRefresh, { passive: true });

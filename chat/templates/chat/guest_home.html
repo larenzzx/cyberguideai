@@ -171,8 +171,20 @@ function getCsrfToken() {
 }
 
 function scrollToBottom() {
+  if (!hasActiveChat()) return;
   if (window.CyberGuideChat) {
     window.CyberGuideChat.scrollPaneToBottom('main-area', 'smooth');
+  }
+}
+
+function hasActiveChat() {
+  const chatMessages = document.getElementById('chat-messages');
+  return Boolean(chatMessages && !chatMessages.classList.contains('hidden'));
+}
+
+function refreshMobileViewport() {
+  if (window.CyberGuideChat) {
+    window.CyberGuideChat.settleViewport();
   }
 }
 
@@ -253,7 +265,7 @@ async function sendMessage() {
   input.style.height = 'auto';
   if (window.CyberGuideChat && window.CyberGuideChat.isTouchDevice()) {
     input.blur();
-    window.CyberGuideChat.refreshViewport();
+    refreshMobileViewport();
   }
   document.getElementById('error-message').classList.add('hidden');
 
@@ -298,7 +310,7 @@ async function sendMessage() {
     if (window.CyberGuideChat && window.CyberGuideChat.shouldRefocusInput()) {
       input.focus();
     } else if (window.CyberGuideChat) {
-      window.CyberGuideChat.refreshViewport();
+      refreshMobileViewport();
     }
   }
 }
@@ -307,15 +319,15 @@ document.addEventListener('DOMContentLoaded', function () {
   const input = document.getElementById('message-input');
   input.addEventListener('input', function () { autoResize(this); });
   input.addEventListener('focus', function () {
-    if (window.CyberGuideChat) {
-      window.CyberGuideChat.refreshViewport();
-      setTimeout(function () { scrollToBottom(); }, 180);
+    refreshMobileViewport();
+    if (hasActiveChat()) {
+      setTimeout(function () { scrollToBottom(); }, 220);
     }
   });
   input.addEventListener('blur', function () {
-    if (window.CyberGuideChat) {
-      window.CyberGuideChat.refreshViewport();
-      setTimeout(function () { scrollToBottom(); }, 180);
+    refreshMobileViewport();
+    if (hasActiveChat()) {
+      setTimeout(function () { scrollToBottom(); }, 220);
     }
   });
   input.addEventListener('keydown', function (e) {
@@ -328,10 +340,12 @@ document.addEventListener('DOMContentLoaded', function () {
     input.focus();
   }
   window.addEventListener('chat:viewportchange', function () {
-    if (window.CyberGuideChat) {
+    if (window.CyberGuideChat && hasActiveChat()) {
       window.CyberGuideChat.scrollPaneToBottom('main-area', 'auto');
     }
   });
+  const mainArea = document.getElementById('main-area');
+  if (mainArea) mainArea.scrollTop = 0;
 });
 </script>
 {% endblock %}

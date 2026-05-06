@@ -86,7 +86,6 @@
     min-height: 0;
     max-height: var(--chat-viewport-height, 100dvh);
     overflow: hidden;
-    transition: height 160ms ease, max-height 160ms ease;
   }
 
   .chat-page.drawer {
