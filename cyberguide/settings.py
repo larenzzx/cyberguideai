@@ -183,3 +183,5 @@ GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')
 
 # VirusTotal API key for server-side Threat Intelligence Lookup.
 VIRUSTOTAL_API_KEY = os.environ.get('VIRUSTOTAL_API_KEY', '')
+ABUSEIPDB_API_KEY = os.environ.get('ABUSEIPDB_API_KEY', '')
+OTX_API_KEY = os.environ.get('OTX_API_KEY', '')

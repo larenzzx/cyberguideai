@@ -66,8 +66,12 @@ function getCsrfToken() {
 
 function setLookupState(isLoading) {
   const button = document.getElementById('lookup-button');
+  const spinner = document.getElementById('lookup-spinner');
+  const buttonText = document.getElementById('lookup-button-text');
   button.disabled = isLoading;
-  button.classList.toggle('loading', isLoading);
+  button.classList.toggle('btn-disabled', isLoading);
+  spinner.classList.toggle('hidden', !isLoading);
+  buttonText.textContent = isLoading ? 'Checking' : 'Lookup';
 }
 
 function showLookupError(message) {
@@ -78,46 +82,83 @@ function showLookupError(message) {
 }
 
 function verdictClass(verdict) {
-  if (verdict === 'Malicious') return 'badge-error';
+  if (verdict === 'Highly Malicious' || verdict === 'Malicious') return 'badge-error';
   if (verdict === 'Suspicious') return 'badge-warning';
   if (verdict === 'Clean') return 'badge-success';
   return 'badge-ghost';
+}
+
+function statusClass(status) {
+  if (status === 'Found') return 'badge-error';
+  if (status === 'Clean') return 'badge-success';
+  if (status === 'Not applicable') return 'badge-ghost';
+  return 'badge-warning';
+}
+
+function formatIndicatorType(type) {
+  return (type || 'unknown').replace('_', ' ');
+}
+
+function escapeHTML(value) {
+  return String(value ?? '').replace(/[&<>"']/g, function(char) {
+    return {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    }[char];
+  });
 }
 
 function renderResult(result) {
   document.getElementById('lookup-error').classList.add('hidden');
   document.getElementById('lookup-result').classList.remove('hidden');
   document.getElementById('result-indicator').textContent = result.indicator;
-  document.getElementById('result-type').textContent = result.indicator_type.replace('_', ' ');
-  document.getElementById('result-ratio').textContent = result.detection_ratio;
-  document.getElementById('result-reputation').textContent =
-    result.reputation === null || result.reputation === undefined ? 'Not reported' : result.reputation;
-  document.getElementById('result-summary').textContent = result.summary;
+  document.getElementById('result-type').textContent = formatIndicatorType(result.indicator_type);
 
-  const verdict = document.getElementById('result-verdict');
-  verdict.textContent = result.verdict;
-  verdict.className = `badge ${verdictClass(result.verdict)} badge-lg`;
+  const combined = result.combined || {};
+  const verdict = document.getElementById('combined-verdict');
+  verdict.textContent = combined.verdict || 'Unknown';
+  verdict.className = `badge ${verdictClass(combined.verdict)} badge-lg`;
+  document.getElementById('risk-score').textContent = `${combined.risk_score ?? 0}/100`;
+  document.getElementById('recommended-action').textContent = combined.recommended_action || 'Review locally before action.';
+  document.getElementById('combined-explanation').textContent = combined.explanation || 'No explanation available.';
 
-  const categories = document.getElementById('result-categories');
-  categories.innerHTML = '';
-  if (result.categories.length) {
-    result.categories.forEach(function(category) {
-      const badge = document.createElement('span');
-      badge.className = 'badge badge-outline badge-sm';
-      badge.textContent = category;
-      categories.appendChild(badge);
-    });
-  } else {
-    const empty = document.createElement('span');
-    empty.className = 'text-sm text-base-content/40';
-    empty.textContent = 'No categories reported';
-    categories.appendChild(empty);
-  }
+  const cards = document.getElementById('source-cards');
+  cards.innerHTML = '';
+  (result.sources || []).forEach(function(source) {
+    const card = document.createElement('article');
+    card.className = 'card bg-base-200 border border-base-300 shadow-sm';
 
-  const stats = result.last_analysis_stats;
-  for (const key of ['malicious', 'suspicious', 'harmless', 'undetected', 'timeout']) {
-    document.getElementById(`stat-${key}`).textContent = stats[key] ?? 0;
-  }
+    const metrics = (source.metrics || []).map(function(metric) {
+      return `
+        <div class="rounded-lg bg-base-300 p-3 border border-base-content/10 min-w-0">
+          <p class="text-xs text-base-content/40 uppercase tracking-wider">${escapeHTML(metric.label)}</p>
+          <p class="font-semibold text-sm mt-1 break-words">${escapeHTML(metric.value)}</p>
+        </div>
+      `;
+    }).join('');
+
+    card.innerHTML = `
+      <div class="card-body p-5">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <h2 class="card-title text-base">${escapeHTML(source.name)}</h2>
+            <div class="flex flex-wrap gap-2 mt-2">
+              <span class="badge ${statusClass(source.status)} badge-sm">${escapeHTML(source.status)}</span>
+              <span class="badge ${verdictClass(source.verdict)} badge-sm">${escapeHTML(source.verdict)}</span>
+            </div>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 gap-2 mt-4">
+          ${metrics || '<p class="text-sm text-base-content/50">No metrics returned.</p>'}
+        </div>
+        <p class="text-sm text-base-content/70 mt-4">${escapeHTML(source.summary || 'No source explanation returned.')}</p>
+      </div>
+    `;
+    cards.appendChild(card);
+  });
 }
 
 async function lookupIndicator() {
