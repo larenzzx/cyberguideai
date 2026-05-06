@@ -1,0 +1,172 @@
+<main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+  <form class="hidden">{% csrf_token %}</form>
+
+  <section class="mb-6">
+    <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-widest text-primary">Email threat investigation</p>
+        <h1 class="text-3xl font-bold mt-1">Phishing Analyzer</h1>
+        <p class="text-base-content/60 max-w-3xl mt-2">
+          Analyze suspicious emails, raw headers, copied Outlook or Gmail content, and Microsoft 365 phishing alerts.
+        </p>
+      </div>
+      <div class="stats stats-vertical sm:stats-horizontal bg-base-200 border border-base-300 shadow-none">
+        <div class="stat py-3 px-4">
+          <div class="stat-title text-xs">Mode</div>
+          <div class="stat-value text-xl">{% if is_guest_preview %}Preview{% else %}Full{% endif %}</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {% if is_guest_preview %}
+  <section class="alert alert-info mb-5 items-start">
+    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5 mt-0.5" fill="none" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+    <div class="text-sm">
+      <p class="font-semibold">Guest Preview</p>
+      <p class="text-base-content/70">
+        Guests can run {{ guest_phishing_limit }} basic phishing analysis attempt(s) per day. Log in with an approved account for full threat enrichment.
+        <span id="guest-phishing-remaining" class="font-semibold"></span>
+      </p>
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="rounded-lg bg-base-200 border border-base-300 shadow-sm overflow-hidden">
+    <div class="border-b border-base-300 px-4 sm:px-5 py-4">
+      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+        <div class="flex items-center gap-2 min-w-0">
+          <div class="w-9 h-9 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l9 6 9-6M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <div class="min-w-0">
+            <h2 class="font-bold leading-tight">Suspicious Email Content</h2>
+            <p class="text-sm text-base-content/50 truncate">Paste message body, headers, alert details, or copied email content.</p>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          <span class="badge badge-outline badge-sm">Language</span>
+          <span class="badge badge-outline badge-sm">Brands</span>
+          <span class="badge badge-outline badge-sm">IOCs</span>
+          <span class="badge badge-outline badge-sm">TI</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="p-4 sm:p-5">
+      <div class="rounded-lg bg-base-100 border border-base-300 focus-within:border-primary/60 transition-colors overflow-hidden">
+        <div class="flex items-center justify-between gap-3 px-3 py-2 border-b border-base-300 bg-base-300/40">
+          <span class="text-xs text-base-content/40 font-mono truncate">suspicious-email.eml</span>
+          <span class="text-xs text-base-content/40 hidden sm:inline">Paste-only analyzer</span>
+        </div>
+        <textarea
+          id="email-input"
+          class="textarea w-full min-h-64 sm:min-h-80 leading-relaxed font-mono text-sm resize-y bg-transparent border-0 rounded-none focus:outline-none focus:border-0"
+          placeholder="Paste suspicious email content, phishing email text, raw email headers, or Microsoft 365 phishing alerts..."
+          spellcheck="false"
+        ></textarea>
+      </div>
+
+      <div class="mt-3 rounded-lg border border-dashed border-base-300 bg-base-300/30 px-4 py-3 text-sm text-base-content/50">
+        Future-ready: .eml drag/drop upload can be added here. Current version analyzes pasted content only.
+      </div>
+
+      <div id="analyzer-error" class="alert alert-error mt-4 hidden">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span id="analyzer-error-text" class="text-sm"></span>
+      </div>
+
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4">
+        <p class="text-xs text-base-content/40">
+          Pasted content is rendered as escaped text in results to reduce XSS risk.
+        </p>
+        <div class="flex flex-col sm:flex-row gap-2 sm:justify-end">
+          <button id="analyze-email-button" type="button" class="btn btn-primary gap-2 sm:min-w-40" onclick="analyzeEmail()">
+            <span id="analyze-spinner" class="loading loading-spinner loading-xs hidden"></span>
+            <span id="analyze-text">Analyze Email</span>
+          </button>
+          <button type="button" class="btn btn-ghost" onclick="clearAnalyzer()">Clear</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="analysis-result" class="hidden mt-6 space-y-5">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div class="card bg-base-200 border border-base-300">
+        <div class="card-body p-5">
+          <p class="text-xs uppercase tracking-wider text-base-content/40">Phishing Verdict</p>
+          <span id="phishing-verdict" class="badge badge-lg mt-2"></span>
+          <p id="phishing-severity" class="text-sm text-base-content/50 mt-2"></p>
+        </div>
+      </div>
+      <div class="card bg-base-200 border border-base-300">
+        <div class="card-body p-5">
+          <p class="text-xs uppercase tracking-wider text-base-content/40">Risk Score</p>
+          <p id="phishing-score" class="font-bold text-3xl mt-2">0/100</p>
+        </div>
+      </div>
+      <div class="card bg-base-200 border border-base-300">
+        <div class="card-body p-5">
+          <p class="text-xs uppercase tracking-wider text-base-content/40">Recommended Actions</p>
+          <ul id="actions-list" class="list-disc pl-5 text-sm text-base-content/70 mt-2 space-y-1"></ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="card bg-base-200 border border-primary/20">
+      <div class="card-body p-5">
+        <h2 class="font-bold">SOC Investigation Summary</h2>
+        <p id="threat-summary" class="text-sm text-base-content/70 mt-2 leading-relaxed"></p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+      <section class="card bg-base-200 border border-base-300">
+        <div class="card-body p-5">
+          <h2 class="card-title text-base">Suspicious Language Findings</h2>
+          <div id="language-findings" class="space-y-3 mt-3"></div>
+        </div>
+      </section>
+
+      <section class="card bg-base-200 border border-base-300">
+        <div class="card-body p-5">
+          <h2 class="card-title text-base">Brand Impersonation Signals</h2>
+          <div id="brand-findings" class="flex flex-wrap gap-2 mt-3"></div>
+        </div>
+      </section>
+
+      <section class="card bg-base-200 border border-base-300">
+        <div class="card-body p-5">
+          <h2 class="card-title text-base">Email Structure Findings</h2>
+          <div id="structure-findings" class="space-y-3 mt-3"></div>
+        </div>
+      </section>
+
+      <section class="card bg-base-200 border border-base-300">
+        <div class="card-body p-5">
+          <h2 class="card-title text-base">Extracted Indicators</h2>
+          <div id="indicator-list" class="space-y-3 mt-3"></div>
+        </div>
+      </section>
+    </div>
+
+    <section class="card bg-base-200 border border-base-300">
+      <div class="card-body p-5">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div>
+            <h2 class="card-title text-base">Threat Intelligence Results</h2>
+            <p class="text-sm text-base-content/50">Full source enrichment is available to approved logged-in users.</p>
+          </div>
+        </div>
+        <div id="ti-results" class="space-y-4 mt-4"></div>
+      </div>
+    </section>
+  </section>
+</main>

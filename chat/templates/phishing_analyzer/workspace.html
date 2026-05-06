@@ -1,0 +1,288 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Phishing Analyzer - CyberGuide AI{% endblock %}
+
+{% block content %}
+{% if request.user.is_authenticated %}
+<div class="drawer lg:drawer-open">
+  <input id="sidebar-drawer" type="checkbox" class="drawer-toggle" />
+  <div class="drawer-content min-h-[100svh] min-h-[100dvh] bg-base-100">
+    <div class="navbar bg-base-200/95 sticky top-0 z-10 border-b border-primary/10 px-4">
+      <div class="flex-none lg:hidden">
+        <label for="sidebar-drawer" class="btn btn-square btn-ghost">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-6 h-6 stroke-current">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+          </svg>
+        </label>
+      </div>
+      <div class="flex-1 px-2 flex items-center gap-3 min-w-0">
+        <img src="{% static 'images/cyberguideai-logo.png' %}" alt="CyberGuide AI" class="w-8 h-8 rounded-lg object-cover lg:hidden" />
+        <h1 class="text-lg font-bold truncate">Phishing Analyzer</h1>
+      </div>
+      <div class="flex items-center gap-1">
+        <a href="/ioc-extractor/" class="btn btn-ghost btn-sm hidden sm:flex">IOC Extractor</a>
+        <a href="/profile/" title="Profile" class="w-9 h-9 rounded-full bg-primary text-primary-content flex items-center justify-center font-bold text-sm">
+          {{ request.user.username|first|upper }}
+        </a>
+      </div>
+    </div>
+    {% include "phishing_analyzer/partials/_workspace_panel.html" %}
+  </div>
+  <div class="drawer-side z-20">
+    <label for="sidebar-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
+    {% include "partials/_sidebar.html" %}
+  </div>
+</div>
+{% else %}
+<div class="min-h-[100svh] min-h-[100dvh] bg-base-100">
+  {% include "partials/_guest_nav.html" %}
+  {% include "phishing_analyzer/partials/_workspace_panel.html" %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const isGuestPreview = {% if request.user.is_authenticated %}false{% else %}true{% endif %};
+
+function getCsrfToken() {
+  for (let cookie of document.cookie.split(';')) {
+    const [key, val] = cookie.trim().split('=');
+    if (key === 'csrftoken') return decodeURIComponent(val);
+  }
+  const tokenInput = document.querySelector('[name=csrfmiddlewaretoken]');
+  return tokenInput ? tokenInput.value : '';
+}
+
+function escapeHTML(value) {
+  return String(value ?? '').replace(/[&<>"']/g, function(char) {
+    return {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    }[char];
+  });
+}
+
+function severityClass(verdict) {
+  if (verdict === 'Highly Suspicious' || verdict === 'Likely Phishing') return 'badge-error';
+  if (verdict === 'Suspicious') return 'badge-warning';
+  if (verdict === 'Low Risk' || verdict === 'Clean') return 'badge-success';
+  return 'badge-ghost';
+}
+
+function tiVerdictClass(verdict) {
+  if (verdict === 'Highly Malicious' || verdict === 'Malicious') return 'badge-error';
+  if (verdict === 'Suspicious') return 'badge-warning';
+  if (verdict === 'Clean') return 'badge-success';
+  return 'badge-ghost';
+}
+
+function sourceStatusClass(status) {
+  if (status === 'Found') return 'badge-error';
+  if (status === 'Clean') return 'badge-success';
+  if (status === 'Not applicable') return 'badge-ghost';
+  return 'badge-warning';
+}
+
+function setAnalyzeLoading(isLoading) {
+  const button = document.getElementById('analyze-email-button');
+  button.disabled = isLoading;
+  document.getElementById('analyze-spinner').classList.toggle('hidden', !isLoading);
+  document.getElementById('analyze-text').textContent = isLoading ? 'Analyzing' : 'Analyze Email';
+}
+
+function showAnalyzerError(message) {
+  document.getElementById('analyzer-error-text').textContent = message;
+  document.getElementById('analyzer-error').classList.remove('hidden');
+}
+
+function clearAnalyzerError() {
+  document.getElementById('analyzer-error').classList.add('hidden');
+}
+
+function updateGuestUsage(usage) {
+  const label = document.getElementById('guest-phishing-remaining');
+  if (!label || !usage) return;
+  label.textContent = `${usage.remaining}/${usage.limit} analysis attempt(s) remaining today.`;
+}
+
+function flattenExtracted(groups) {
+  const labels = {
+    ip_addresses: 'IP',
+    domains: 'Domain',
+    urls: 'URL',
+    email_addresses: 'Email',
+    hashes: 'Hash',
+  };
+  const output = [];
+  Object.keys(labels).forEach(function(key) {
+    (groups[key] || []).forEach(function(item) {
+      output.push({ ...item, groupLabel: labels[key] });
+    });
+  });
+  return output;
+}
+
+function renderFindings(findings) {
+  if (!findings.length) {
+    return '<p class="text-sm text-base-content/50">No suspicious language pattern matched.</p>';
+  }
+  return findings.map(function(finding) {
+    const matches = finding.matches.map(function(match) {
+      return `<span class="badge badge-outline badge-sm">${escapeHTML(match)}</span>`;
+    }).join(' ');
+    return `
+      <div class="rounded-lg bg-base-300 border border-base-content/10 p-3">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="font-semibold text-sm">${escapeHTML(finding.category)}</span>
+          <span class="badge ${finding.severity === 'High' ? 'badge-error' : 'badge-warning'} badge-sm">${escapeHTML(finding.severity)}</span>
+        </div>
+        <div class="flex flex-wrap gap-1.5 mt-2">${matches}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderIndicators(extracted) {
+  const items = flattenExtracted((extracted || {}).groups || {});
+  if (!items.length) {
+    return '<p class="text-sm text-base-content/50">No IOCs were extracted from the submitted email.</p>';
+  }
+  return items.map(function(item) {
+    return `
+      <div class="rounded-lg bg-base-300 border border-base-content/10 p-3 min-w-0">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <span class="badge badge-outline badge-sm">${escapeHTML(item.groupLabel)}</span>
+            <p class="font-mono text-sm break-all mt-2">${escapeHTML(item.value)}</p>
+          </div>
+          <button class="btn btn-ghost btn-xs shrink-0" onclick="copyText('${escapeHTML(item.value)}')">Copy</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderThreatIntel(enriched) {
+  if (!enriched.length) {
+    return `<p class="text-sm text-base-content/50">${isGuestPreview ? 'Threat enrichment is available after login with an approved account.' : 'No enrichable indicators were analyzed.'}</p>`;
+  }
+  return enriched.map(function(result) {
+    const combined = result.combined || {};
+    const sources = (result.sources || []).map(function(source) {
+      const metrics = (source.metrics || []).slice(0, 4).map(function(metric) {
+        return `
+          <div class="rounded-md bg-base-100 p-2 border border-base-content/10">
+            <p class="text-xs text-base-content/40 uppercase tracking-wider">${escapeHTML(metric.label)}</p>
+            <p class="text-xs font-semibold break-words mt-1">${escapeHTML(metric.value)}</p>
+          </div>
+        `;
+      }).join('');
+      return `
+        <details class="collapse collapse-arrow bg-base-300 border border-base-content/10">
+          <summary class="collapse-title min-h-0 py-3 text-sm font-semibold">
+            ${escapeHTML(source.name)}
+            <span class="badge ${sourceStatusClass(source.status)} badge-sm ml-2">${escapeHTML(source.status)}</span>
+            <span class="badge ${tiVerdictClass(source.verdict)} badge-sm ml-1">${escapeHTML(source.verdict)}</span>
+          </summary>
+          <div class="collapse-content">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">${metrics || '<p class="text-xs text-base-content/40">No metrics returned.</p>'}</div>
+            <p class="text-xs text-base-content/60">${escapeHTML(source.summary)}</p>
+          </div>
+        </details>
+      `;
+    }).join('');
+    return `
+      <article class="rounded-lg bg-base-200 border border-base-300 p-4">
+        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div class="min-w-0">
+            <p class="font-mono text-sm break-all">${escapeHTML(result.indicator)}</p>
+            <p class="text-xs text-base-content/40 mt-1">${escapeHTML((result.indicator_type || '').replace('_', ' '))}</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <span class="badge ${tiVerdictClass(combined.verdict)}">${escapeHTML(combined.verdict || 'Unknown')}</span>
+            <span class="badge badge-outline">${combined.risk_score ?? 0}/100</span>
+          </div>
+        </div>
+        <p class="text-xs text-base-content/70 mt-3">${escapeHTML(combined.explanation || '')}</p>
+        <div class="space-y-2 mt-3">${sources}</div>
+      </article>
+    `;
+  }).join('');
+}
+
+function renderAnalysis(result) {
+  document.getElementById('analysis-result').classList.remove('hidden');
+  document.getElementById('phishing-verdict').textContent = result.verdict;
+  document.getElementById('phishing-verdict').className = `badge badge-lg ${severityClass(result.verdict)}`;
+  document.getElementById('phishing-score').textContent = `${result.risk_score}/100`;
+  document.getElementById('phishing-severity').textContent = result.severity;
+  document.getElementById('threat-summary').textContent = result.summary;
+
+  document.getElementById('actions-list').innerHTML = (result.recommended_actions || []).map(function(action) {
+    return `<li>${escapeHTML(action)}</li>`;
+  }).join('');
+
+  document.getElementById('language-findings').innerHTML = renderFindings(result.language_findings || []);
+  const brands = result.brand_impersonation || [];
+  document.getElementById('brand-findings').innerHTML = brands.length
+    ? brands.map(function(brand) { return `<span class="badge badge-outline">${escapeHTML(brand)}</span>`; }).join(' ')
+    : '<span class="text-sm text-base-content/50">No common brand impersonation pattern matched.</span>';
+
+  document.getElementById('structure-findings').innerHTML = (result.structure_findings || []).length
+    ? result.structure_findings.map(function(item) {
+        return `<div class="rounded-lg bg-base-300 border border-base-content/10 p-3"><p class="font-semibold text-sm">${escapeHTML(item.label)}</p><p class="text-xs text-base-content/60 mt-1">${escapeHTML(item.detail)}</p></div>`;
+      }).join('')
+    : '<p class="text-sm text-base-content/50">No notable email structure pattern matched.</p>';
+
+  document.getElementById('indicator-list').innerHTML = renderIndicators(result.extracted);
+  document.getElementById('ti-results').innerHTML = renderThreatIntel(result.enriched_indicators || []);
+}
+
+async function analyzeEmail() {
+  const input = document.getElementById('email-input');
+  const email = input.value.trim();
+  if (!email) {
+    showAnalyzerError('Paste suspicious email content or raw headers first.');
+    return;
+  }
+  clearAnalyzerError();
+  setAnalyzeLoading(true);
+  try {
+    const response = await fetch('/phishing-analyzer/analyze/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrfToken(),
+      },
+      body: JSON.stringify({ email }),
+    });
+    const data = await response.json();
+    if (!response.ok || data.error) {
+      showAnalyzerError(data.error || 'Phishing analysis failed.');
+      return;
+    }
+    updateGuestUsage(data.guest_usage);
+    renderAnalysis(data.result);
+  } catch (error) {
+    showAnalyzerError('Network error during phishing analysis.');
+  } finally {
+    setAnalyzeLoading(false);
+  }
+}
+
+function clearAnalyzer() {
+  document.getElementById('email-input').value = '';
+  document.getElementById('analysis-result').classList.add('hidden');
+  clearAnalyzerError();
+}
+
+function copyText(value) {
+  navigator.clipboard.writeText(value).catch(function() {});
+}
+</script>
+{% endblock %}
