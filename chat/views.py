@@ -1,6 +1,7 @@
 import json
 import os
 import base64
+import hashlib
 import ipaddress
 import re
 import secrets
@@ -12,6 +13,7 @@ import groq
 import httpx
 
 from django.conf import settings
+from django.core.cache import cache
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
@@ -20,6 +22,7 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.contrib import messages
 from django.db.models import Count
 from django.http import JsonResponse
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 from dotenv import dotenv_values
 
@@ -107,9 +110,47 @@ _HASH_PATTERNS = {
     'sha1': re.compile(r'^[a-fA-F0-9]{40}$'),
     'sha256': re.compile(r'^[a-fA-F0-9]{64}$'),
 }
+_HASH_EXTRACT_PATTERNS = {
+    'md5': re.compile(r'(?<![A-Fa-f0-9])[A-Fa-f0-9]{32}(?![A-Fa-f0-9])'),
+    'sha1': re.compile(r'(?<![A-Fa-f0-9])[A-Fa-f0-9]{40}(?![A-Fa-f0-9])'),
+    'sha256': re.compile(r'(?<![A-Fa-f0-9])[A-Fa-f0-9]{64}(?![A-Fa-f0-9])'),
+}
 _DOMAIN_PATTERN = re.compile(
     r'^(?=.{1,253}$)(?!-)(?:[A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}$'
 )
+_EMAIL_PATTERN = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}\b')
+_URL_PATTERN = re.compile(r'\b(?:hxxps?|https?)://[^\s<>"\')]+', re.IGNORECASE)
+_IPV4_CANDIDATE_PATTERN = re.compile(r'(?<!\d)(?:\d{1,3}\.){3}\d{1,3}(?!\d)')
+_DOMAIN_CANDIDATE_PATTERN = re.compile(
+    r'(?<![@\w.-])(?:[A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}(?![\w.-])'
+)
+GUEST_CHAT_DAILY_LIMIT = 5
+GUEST_TI_DAILY_LIMIT = 3
+GUEST_LIMIT_MESSAGE = 'Guest limit reached. Please log in with an approved account to continue using full CyberGuide AI features.'
+LOGIN_REQUIRED_SOC_MESSAGE = 'Sign in with an approved account to enrich indicators and unlock full SOC investigation features.'
+
+
+def _daily_session_count(request, key):
+    today = timezone.localdate().isoformat()
+    usage = request.session.get(key)
+    if not isinstance(usage, dict) or usage.get('date') != today:
+        usage = {'date': today, 'count': 0}
+        request.session[key] = usage
+    return usage
+
+
+def _consume_guest_limit(request, key, limit):
+    if request.user.is_authenticated:
+        return True, 0, limit
+
+    usage = _daily_session_count(request, key)
+    if int(usage.get('count') or 0) >= limit:
+        return False, 0, limit
+
+    usage['count'] = int(usage.get('count') or 0) + 1
+    request.session[key] = usage
+    request.session.modified = True
+    return True, max(0, limit - usage['count']), limit
 
 
 def _detect_indicator(indicator):
@@ -127,8 +168,11 @@ def _detect_indicator(indicator):
     except ValueError:
         pass
 
-    parsed = urlparse(value)
-    if parsed.scheme in {'http', 'https'} and parsed.netloc:
+    try:
+        parsed = urlparse(value)
+    except ValueError:
+        parsed = None
+    if parsed and parsed.scheme in {'http', 'https'} and parsed.netloc:
         return 'url', value
 
     normalized = value.rstrip('.').lower()
@@ -515,6 +559,175 @@ def _combined_verdict(indicator_type, sources):
     }
 
 
+def _build_threat_intel_result(indicator):
+    indicator_type, normalized = _detect_indicator(indicator)
+    if not indicator_type:
+        return None
+
+    sources = []
+    with httpx.Client(timeout=15.0) as client:
+        source_meta = {
+            _virustotal_source: ('VirusTotal', 'virustotal'),
+            _abuseipdb_source: ('AbuseIPDB', 'abuseipdb'),
+            _otx_source: ('AlienVault OTX', 'otx'),
+        }
+        for lookup in (_virustotal_source, _abuseipdb_source, _otx_source):
+            try:
+                sources.append(lookup(client, indicator_type, normalized))
+            except httpx.TimeoutException:
+                source_name, source_key = source_meta[lookup]
+                sources.append(_source_result(
+                    source_name,
+                    source_key,
+                    'Error',
+                    summary=f'{source_name} request timed out.',
+                ))
+            except (httpx.RequestError, ValueError, KeyError):
+                source_name, source_key = source_meta[lookup]
+                sources.append(_source_result(
+                    source_name,
+                    source_key,
+                    'Error',
+                    summary=f'{source_name} lookup could not be completed.',
+                ))
+
+    return {
+        'indicator': normalized,
+        'indicator_type': indicator_type,
+        'combined': _combined_verdict(indicator_type, sources),
+        'sources': sources,
+    }
+
+
+def _normalize_obfuscated_url(value):
+    normalized = re.sub(r'^hxxp', 'http', value, flags=re.IGNORECASE)
+    normalized = normalized.replace('[.]', '.').replace('(.)', '.')
+    return normalized.strip().rstrip('.,;:')
+
+
+def _normalize_obfuscated_domain(value):
+    return value.replace('[.]', '.').replace('(.)', '.').strip().rstrip('.,;:')
+
+
+def _clean_indicator_token(value):
+    return value.strip().strip('\'"<>[](){}').rstrip('.,;:')
+
+
+def _add_ioc(groups, seen, indicator_type, value, subtype=None):
+    cleaned = _clean_indicator_token(value)
+    if not cleaned:
+        return
+    key_value = cleaned.lower()
+    key = (indicator_type, key_value)
+    if key in seen:
+        return
+    seen.add(key)
+    groups[indicator_type].append({
+        'type': indicator_type,
+        'subtype': subtype or indicator_type,
+        'value': cleaned,
+        'lookup_value': _normalize_obfuscated_url(cleaned) if indicator_type == 'urls' else cleaned,
+    })
+
+
+def _extract_iocs(raw_text):
+    groups = {
+        'ip_addresses': [],
+        'domains': [],
+        'urls': [],
+        'email_addresses': [],
+        'hashes': [],
+    }
+    seen = set()
+    text = raw_text or ''
+
+    occupied_spans = []
+    for match in _URL_PATTERN.finditer(text):
+        value = _clean_indicator_token(match.group(0))
+        normalized = _normalize_obfuscated_url(value)
+        if _detect_indicator(normalized)[0] == 'url':
+            _add_ioc(groups, seen, 'urls', value, 'url')
+            occupied_spans.append(match.span())
+
+    for match in _EMAIL_PATTERN.finditer(text):
+        email = _clean_indicator_token(match.group(0)).lower()
+        _add_ioc(groups, seen, 'email_addresses', email, 'email')
+        occupied_spans.append(match.span())
+
+    for hash_type, pattern in _HASH_EXTRACT_PATTERNS.items():
+        for match in pattern.finditer(text):
+            _add_ioc(groups, seen, 'hashes', match.group(0).lower(), hash_type.upper())
+
+    for match in _IPV4_CANDIDATE_PATTERN.finditer(text):
+        value = match.group(0)
+        try:
+            ipaddress.ip_address(value)
+        except ValueError:
+            continue
+        _add_ioc(groups, seen, 'ip_addresses', value, 'IPv4')
+
+    def in_occupied_span(start, end):
+        return any(start >= span_start and end <= span_end for span_start, span_end in occupied_spans)
+
+    for match in _DOMAIN_CANDIDATE_PATTERN.finditer(text):
+        start, end = match.span()
+        if in_occupied_span(start, end):
+            continue
+        domain = _clean_indicator_token(match.group(0)).lower().rstrip('.')
+        if _DOMAIN_PATTERN.match(domain):
+            _add_ioc(groups, seen, 'domains', domain, 'domain')
+
+    defanged_domain_pattern = re.compile(
+        r'(?<![@\w.-])(?:[A-Za-z0-9-]{1,63}(?:\.|\[\.\]|\(\.\)))+[A-Za-z]{2,63}(?![\w.-])'
+    )
+    for match in defanged_domain_pattern.finditer(text):
+        start, end = match.span()
+        if in_occupied_span(start, end):
+            continue
+        domain = _normalize_obfuscated_domain(_clean_indicator_token(match.group(0)).lower())
+        if _DOMAIN_PATTERN.match(domain):
+            _add_ioc(groups, seen, 'domains', domain, 'domain')
+
+    return {
+        'groups': groups,
+        'total': sum(len(items) for items in groups.values()),
+    }
+
+
+def _summarize_investigation(enriched_results):
+    analyzed = [item for item in enriched_results if item.get('combined')]
+    if not analyzed:
+        return 'No enriched indicators are available yet. Extract indicators and analyze them to generate an investigation summary.'
+
+    verdict_counts = {}
+    for item in analyzed:
+        verdict = item['combined'].get('verdict', 'Unknown')
+        verdict_counts[verdict] = verdict_counts.get(verdict, 0) + 1
+
+    high_risk = [
+        item for item in analyzed
+        if item['combined'].get('verdict') in {'Highly Malicious', 'Malicious'}
+    ]
+    suspicious = [item for item in analyzed if item['combined'].get('verdict') == 'Suspicious']
+    clean = [item for item in analyzed if item['combined'].get('verdict') == 'Clean']
+
+    parts = [f'The submitted content contains {len(analyzed)} enriched indicator(s).']
+    if high_risk:
+        parts.append(f'{len(high_risk)} indicator(s) were assessed as malicious or highly malicious.')
+    if suspicious:
+        parts.append(f'{len(suspicious)} indicator(s) were assessed as suspicious.')
+    if clean and not high_risk and not suspicious:
+        parts.append('The analyzed indicators did not return malicious public threat intelligence signals.')
+    if high_risk:
+        parts.append('Prioritize containment review, log scoping, and blocking decisions according to policy.')
+    elif suspicious:
+        parts.append('Correlate these indicators with internal telemetry before containment.')
+    else:
+        parts.append('Continue monitoring and validate with local logs if the alert context remains concerning.')
+
+    return ' '.join(parts)
+
+
 # =============================================================================
 # AUTHENTICATION VIEWS
 # =============================================================================
@@ -584,15 +797,118 @@ def guest_landing(request):
     """Root landing page — guests get the chat UI, logged-in users go to /chat/."""
     if request.user.is_authenticated:
         return redirect('/chat/')
-    return render(request, 'chat/guest_home.html')
+    return render(request, 'chat/guest_home.html', {'guest_chat_limit': GUEST_CHAT_DAILY_LIMIT})
 
 
 def threat_intelligence(request):
     """Standalone threat intelligence lookup page for guests and users."""
-    context = {}
+    context = {
+        'guest_ti_limit': GUEST_TI_DAILY_LIMIT,
+        'is_guest_preview': not request.user.is_authenticated,
+    }
     if request.user.is_authenticated:
         context['conversations'] = Conversation.objects.filter(user=request.user)
     return render(request, 'threat_intel/lookup.html', context)
+
+
+def ioc_extractor(request):
+    """SOC investigation workspace for extracting and enriching IOCs."""
+    context = {
+        'is_guest_preview': not request.user.is_authenticated,
+    }
+    if request.user.is_authenticated:
+        context['conversations'] = Conversation.objects.filter(user=request.user)
+    return render(request, 'ioc_extractor/workspace.html', context)
+
+
+@require_POST
+def ioc_extract(request):
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid request format.'}, status=400)
+
+    raw_text = str(data.get('text', ''))
+    if not raw_text.strip():
+        return JsonResponse({'error': 'Paste alert, log, email, or investigation text first.'}, status=400)
+    if len(raw_text) > 75000:
+        return JsonResponse({'error': 'Input is too large. Paste 75,000 characters or fewer.'}, status=400)
+
+    return JsonResponse({'result': _extract_iocs(raw_text)})
+
+
+@require_POST
+def ioc_enrich(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'error': LOGIN_REQUIRED_SOC_MESSAGE,
+            'login_required': True,
+        }, status=403)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid request format.'}, status=400)
+
+    indicator = str(data.get('indicator', '')).strip()
+    lookup_value = str(data.get('lookup_value', indicator)).strip()
+    if not lookup_value:
+        return JsonResponse({'error': 'Indicator is required.'}, status=400)
+
+    indicator_type, normalized = _detect_indicator(lookup_value)
+    if not indicator_type and _EMAIL_PATTERN.fullmatch(indicator):
+        sources = [
+            _source_result('VirusTotal', 'virustotal', 'Not applicable', summary='Email address enrichment is not supported by this lookup.'),
+            _source_result('AbuseIPDB', 'abuseipdb', 'Not applicable', summary='AbuseIPDB is used for IP address indicators only.'),
+            _source_result('AlienVault OTX', 'otx', 'Not applicable', summary='OTX email address enrichment is not enabled in this workspace.'),
+        ]
+        return JsonResponse({
+            'result': {
+                'indicator': indicator,
+                'indicator_type': 'email_address',
+                'combined': _combined_verdict('email_address', sources),
+                'sources': sources,
+            }
+        })
+
+    if not indicator_type:
+        return JsonResponse({'error': 'Unsupported or invalid indicator.'}, status=400)
+
+    cache_key = 'ioc-enrich:' + hashlib.sha256(normalized.encode()).hexdigest()
+    cached = cache.get(cache_key)
+    if cached:
+        cached['cached'] = True
+        return JsonResponse({'result': cached})
+
+    try:
+        result = _build_threat_intel_result(normalized)
+    except httpx.TimeoutException:
+        return JsonResponse({'error': 'Threat intelligence lookup timed out.'}, status=504)
+    except httpx.RequestError:
+        return JsonResponse({'error': 'Could not connect to threat intelligence sources.'}, status=503)
+
+    cache.set(cache_key, result, 600)
+    return JsonResponse({'result': result})
+
+
+@require_POST
+def ioc_summary(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'error': LOGIN_REQUIRED_SOC_MESSAGE,
+            'login_required': True,
+        }, status=403)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid request format.'}, status=400)
+
+    enriched = data.get('results') or []
+    if not isinstance(enriched, list):
+        return JsonResponse({'error': 'Invalid enrichment result format.'}, status=400)
+
+    return JsonResponse({'summary': _summarize_investigation(enriched)})
 
 
 @require_POST
@@ -610,45 +926,28 @@ def threat_intelligence_lookup(request):
             'error': 'Invalid indicator. Enter an IP address, domain, URL, MD5, SHA1, or SHA256 hash.'
         }, status=400)
 
-    sources = []
+    allowed, remaining, limit = _consume_guest_limit(request, 'guest_ti_lookup_usage', GUEST_TI_DAILY_LIMIT)
+    if not allowed:
+        return JsonResponse({
+            'error': GUEST_LIMIT_MESSAGE,
+            'guest_limit_reached': True,
+            'limit': limit,
+            'remaining': remaining,
+        }, status=429)
+
     try:
-        with httpx.Client(timeout=15.0) as client:
-            source_meta = {
-                _virustotal_source: ('VirusTotal', 'virustotal'),
-                _abuseipdb_source: ('AbuseIPDB', 'abuseipdb'),
-                _otx_source: ('AlienVault OTX', 'otx'),
-            }
-            for lookup in (_virustotal_source, _abuseipdb_source, _otx_source):
-                try:
-                    sources.append(lookup(client, indicator_type, normalized))
-                except httpx.TimeoutException:
-                    source_name, source_key = source_meta[lookup]
-                    sources.append(_source_result(
-                        source_name,
-                        source_key,
-                        'Error',
-                        summary=f'{source_name} request timed out.',
-                    ))
-                except (httpx.RequestError, ValueError, KeyError):
-                    source_name, source_key = source_meta[lookup]
-                    sources.append(_source_result(
-                        source_name,
-                        source_key,
-                        'Error',
-                        summary=f'{source_name} lookup could not be completed.',
-                    ))
+        result = _build_threat_intel_result(normalized)
     except httpx.TimeoutException:
         return JsonResponse({'error': 'Threat intelligence lookup timed out.'}, status=504)
     except httpx.RequestError:
         return JsonResponse({'error': 'Could not connect to threat intelligence sources.'}, status=503)
 
     return JsonResponse({
-        'result': {
-            'indicator': normalized,
-            'indicator_type': indicator_type,
-            'combined': _combined_verdict(indicator_type, sources),
-            'sources': sources,
-        }
+        'result': result,
+        'guest_usage': None if request.user.is_authenticated else {
+            'limit': limit,
+            'remaining': remaining,
+        },
     })
 
 
@@ -669,6 +968,16 @@ def guest_send(request):
         if not messages_for_api:
             return JsonResponse({'error': 'No messages provided.'}, status=400)
 
+        allowed, remaining, limit = _consume_guest_limit(request, 'guest_chat_usage', GUEST_CHAT_DAILY_LIMIT)
+        if not allowed:
+            return JsonResponse({
+                'error': GUEST_LIMIT_MESSAGE,
+                'rate_limited': True,
+                'guest_limit_reached': True,
+                'limit': limit,
+                'remaining': remaining,
+            }, status=429)
+
         api_key = os.environ.get('GROQ_API_KEY', '')
         if not api_key:
             return JsonResponse({
@@ -687,7 +996,14 @@ def guest_send(request):
 
         assistant_text = response.choices[0].message.content or \
             'I encountered an issue generating a response. Please try again.'
-        return JsonResponse({'response': assistant_text, 'error': None})
+        return JsonResponse({
+            'response': assistant_text,
+            'error': None,
+            'guest_usage': {
+                'limit': limit,
+                'remaining': remaining,
+            },
+        })
 
     except groq.AuthenticationError:
         return JsonResponse({

@@ -41,8 +41,9 @@
         <span class="text-xs text-base-content/50 hidden sm:block">Security, networking, Microsoft, and helpdesk guidance</span>
       </div>
     </div>
-    <div class="w-full sm:w-auto grid grid-cols-3 sm:flex items-center gap-2">
+    <div class="w-full sm:w-auto grid grid-cols-4 sm:flex items-center gap-2">
       <a href="/" class="btn btn-ghost btn-sm px-2 sm:px-3">Chat</a>
+      <a href="/ioc-extractor/" class="btn btn-ghost btn-sm px-2 sm:px-3">IOC</a>
       <a href="/login/" class="btn btn-ghost btn-sm px-2 sm:px-3">Login</a>
       <a href="/register/" class="btn btn-primary btn-sm px-2 sm:px-3">Sign Up</a>
     </div>
@@ -161,6 +162,12 @@ function renderResult(result) {
   });
 }
 
+function updateGuestThreatIntelUsage(usage) {
+  const label = document.getElementById('guest-ti-remaining');
+  if (!label || !usage) return;
+  label.textContent = `${usage.remaining}/${usage.limit} lookup(s) remaining today.`;
+}
+
 async function lookupIndicator() {
   const input = document.getElementById('indicator-input');
   const indicator = input.value.trim();
@@ -184,6 +191,7 @@ async function lookupIndicator() {
       showLookupError(data.error || 'Lookup failed. Please try again.');
       return;
     }
+    updateGuestThreatIntelUsage(data.guest_usage);
     renderResult(data.result);
   } catch (error) {
     showLookupError('Network error. Please check your connection and try again.');
