@@ -126,6 +126,7 @@ _DOMAIN_CANDIDATE_PATTERN = re.compile(
 )
 GUEST_CHAT_DAILY_LIMIT = 5
 GUEST_TI_DAILY_LIMIT = 3
+GUEST_PHISHING_DAILY_LIMIT = 3
 GUEST_LIMIT_MESSAGE = 'Guest limit reached. Please log in with an approved account to continue using full CyberGuide AI features.'
 LOGIN_REQUIRED_SOC_MESSAGE = 'Sign in with an approved account to enrich indicators and unlock full SOC investigation features.'
 
@@ -728,6 +729,224 @@ def _summarize_investigation(enriched_results):
     return ' '.join(parts)
 
 
+_PHISHING_LANGUAGE_PATTERNS = [
+    ('Urgency', r'\b(urgent|immediate action|act now|verify immediately|click here now|within 24 hours|final notice)\b'),
+    ('Fear or Suspension Threat', r'\b(account (?:will be )?(?:disabled|suspended|locked)|service will be terminated|security alert|unusual activity)\b'),
+    ('Credential Request', r'\b(verify your account|confirm your password|login to verify|validate your credentials|password expires?)\b'),
+    ('Payment or Invoice Lure', r'\b(invoice|payment overdue|wire transfer|billing issue|refund pending|purchase order|remittance)\b'),
+    ('Attachment or Link Call-to-Action', r'\b(open the attachment|download the file|review document|click the link|secure message)\b'),
+    ('Impersonation Language', r'\b(help desk|it support|mailbox team|security team|administrator|microsoft 365 team)\b'),
+]
+
+_BRAND_PATTERNS = [
+    ('Microsoft', r'\b(microsoft|office 365|m365|outlook|onedrive|sharepoint|teams|azure)\b'),
+    ('Google', r'\b(google|gmail|workspace|drive)\b'),
+    ('PayPal', r'\b(paypal)\b'),
+    ('Banking', r'\b(bank|chase|wells fargo|citibank|bank of america|capital one)\b'),
+    ('Delivery', r'\b(fedex|ups|dhl|usps|delivery notice|shipment)\b'),
+    ('DocuSign', r'\b(docusign|e-signature|electronic signature)\b'),
+]
+
+
+def _detect_phishing_language(text):
+    findings = []
+    for label, pattern in _PHISHING_LANGUAGE_PATTERNS:
+        matches = []
+        for match in re.finditer(pattern, text, re.IGNORECASE):
+            phrase = match.group(0).strip()
+            if phrase.lower() not in {item.lower() for item in matches}:
+                matches.append(phrase)
+        if matches:
+            findings.append({
+                'category': label,
+                'matches': matches[:6],
+                'severity': 'High' if label in {'Fear or Suspension Threat', 'Credential Request'} else 'Medium',
+            })
+    return findings
+
+
+def _detect_brand_impersonation(text):
+    brands = []
+    for brand, pattern in _BRAND_PATTERNS:
+        if re.search(pattern, text, re.IGNORECASE):
+            brands.append(brand)
+    return brands
+
+
+def _email_structure_findings(text, extracted):
+    findings = []
+    lowered = text.lower()
+    url_count = len(extracted['groups'].get('urls', []))
+    email_count = len(extracted['groups'].get('email_addresses', []))
+    if url_count:
+        findings.append({'label': 'External link present', 'detail': f'{url_count} URL(s) detected in the message.'})
+    if email_count >= 2:
+        findings.append({'label': 'Multiple email addresses', 'detail': f'{email_count} email address(es) detected in the content.'})
+    if 'reply-to:' in lowered and 'from:' in lowered:
+        findings.append({'label': 'Header fields present', 'detail': 'Raw header fields are present; compare From, Reply-To, and Return-Path manually.'})
+    if re.search(r'<a\s+href=', text, re.IGNORECASE):
+        findings.append({'label': 'HTML link markup', 'detail': 'HTML anchor tags were detected; verify displayed link text against destination URLs.'})
+    return findings
+
+
+def _phishing_actions(verdict, enriched_results, language_findings, brands):
+    actions = []
+    if verdict in {'Highly Suspicious', 'Likely Phishing'}:
+        actions.extend([
+            'Quarantine or remove the message from affected mailboxes.',
+            'Block malicious sender, URL, domain, or IP indicators according to policy.',
+            'Search mail and proxy logs for other users who received or clicked the message.',
+        ])
+    elif verdict == 'Suspicious':
+        actions.extend([
+            'Do not click links or open attachments until validation is complete.',
+            'Correlate extracted indicators with email gateway, proxy, DNS, and endpoint logs.',
+        ])
+    else:
+        actions.append('No immediate containment based only on this analysis; continue validation if the report context is concerning.')
+
+    if any(item.get('combined', {}).get('verdict') in {'Highly Malicious', 'Malicious'} for item in enriched_results):
+        actions.append('Prioritize investigation of indicators with malicious threat intelligence verdicts.')
+    if any(finding['category'] == 'Credential Request' for finding in language_findings):
+        actions.append('If credentials may have been submitted, reset the affected password and review sign-in logs.')
+    if brands:
+        actions.append('Validate the message against the claimed brand or internal service through a trusted channel.')
+    return actions[:6]
+
+
+def _score_phishing_analysis(language_findings, brands, extracted, enriched_results):
+    score = 0
+    score += min(35, len(language_findings) * 9)
+    if any(item['severity'] == 'High' for item in language_findings):
+        score += 12
+    score += min(18, len(brands) * 6)
+
+    groups = extracted.get('groups') or {}
+    if groups.get('urls'):
+        score += 12
+    if groups.get('domains'):
+        score += 6
+    if groups.get('ip_addresses'):
+        score += 5
+    if groups.get('email_addresses'):
+        score += 4
+
+    for result in enriched_results:
+        verdict = (result.get('combined') or {}).get('verdict')
+        risk = int((result.get('combined') or {}).get('risk_score') or 0)
+        if verdict == 'Highly Malicious':
+            score += 30
+        elif verdict == 'Malicious':
+            score += 24
+        elif verdict == 'Suspicious':
+            score += 14
+        else:
+            score += min(10, risk // 10)
+
+    score = max(0, min(100, score))
+    if score >= 85:
+        verdict = 'Highly Suspicious'
+        severity = 'Critical'
+    elif score >= 65:
+        verdict = 'Likely Phishing'
+        severity = 'High'
+    elif score >= 35:
+        verdict = 'Suspicious'
+        severity = 'Medium'
+    elif score > 0:
+        verdict = 'Low Risk'
+        severity = 'Low'
+    elif extracted.get('total'):
+        verdict = 'Unknown'
+        severity = 'Unknown'
+    else:
+        verdict = 'Clean'
+        severity = 'Informational'
+    return score, verdict, severity
+
+
+def _summarize_phishing_analysis(verdict, score, language_findings, brands, extracted, enriched_results):
+    parts = [f'This message is assessed as {verdict.lower()} with a phishing probability score of {score}/100.']
+    if language_findings:
+        categories = ', '.join(finding['category'].lower() for finding in language_findings[:3])
+        parts.append(f'Observed phishing language includes {categories}.')
+    if brands:
+        parts.append(f'The content references possible brand impersonation targets: {", ".join(brands[:4])}.')
+    if extracted.get('total'):
+        parts.append(f'{extracted["total"]} indicator(s) were extracted for investigation.')
+    malicious = [
+        item for item in enriched_results
+        if (item.get('combined') or {}).get('verdict') in {'Highly Malicious', 'Malicious'}
+    ]
+    suspicious = [
+        item for item in enriched_results
+        if (item.get('combined') or {}).get('verdict') == 'Suspicious'
+    ]
+    if malicious:
+        parts.append(f'{len(malicious)} enriched indicator(s) returned malicious threat intelligence.')
+    elif suspicious:
+        parts.append(f'{len(suspicious)} enriched indicator(s) returned suspicious threat intelligence.')
+    elif enriched_results:
+        parts.append('No enriched indicator returned a malicious public threat intelligence verdict.')
+    return ' '.join(parts)
+
+
+def _enrich_extracted_for_phishing(extracted, full_enrichment):
+    if not full_enrichment:
+        return []
+
+    candidates = []
+    for group_key in ('ip_addresses', 'domains', 'urls', 'hashes'):
+        for item in extracted['groups'].get(group_key, []):
+            lookup_value = item.get('lookup_value') or item.get('value')
+            indicator_type, normalized = _detect_indicator(lookup_value)
+            if indicator_type:
+                candidates.append(normalized)
+
+    enriched = []
+    seen = set()
+    for indicator in candidates[:12]:
+        if indicator in seen:
+            continue
+        seen.add(indicator)
+        cache_key = 'phishing-enrich:' + hashlib.sha256(indicator.encode()).hexdigest()
+        cached = cache.get(cache_key)
+        if cached:
+            enriched.append(cached)
+            continue
+        try:
+            result = _build_threat_intel_result(indicator)
+        except (httpx.TimeoutException, httpx.RequestError):
+            continue
+        cache.set(cache_key, result, 600)
+        enriched.append(result)
+    return enriched
+
+
+def _analyze_phishing_email(text, full_enrichment=True):
+    extracted = _extract_iocs(text)
+    language_findings = _detect_phishing_language(text)
+    brands = _detect_brand_impersonation(text)
+    structure_findings = _email_structure_findings(text, extracted)
+    enriched = _enrich_extracted_for_phishing(extracted, full_enrichment)
+    score, verdict, severity = _score_phishing_analysis(language_findings, brands, extracted, enriched)
+    summary = _summarize_phishing_analysis(verdict, score, language_findings, brands, extracted, enriched)
+    actions = _phishing_actions(verdict, enriched, language_findings, brands)
+    return {
+        'verdict': verdict,
+        'severity': severity,
+        'risk_score': score,
+        'summary': summary,
+        'recommended_actions': actions,
+        'language_findings': language_findings,
+        'brand_impersonation': brands,
+        'structure_findings': structure_findings,
+        'extracted': extracted,
+        'enriched_indicators': enriched,
+        'full_enrichment': full_enrichment,
+    }
+
+
 # =============================================================================
 # AUTHENTICATION VIEWS
 # =============================================================================
@@ -819,6 +1038,49 @@ def ioc_extractor(request):
     if request.user.is_authenticated:
         context['conversations'] = Conversation.objects.filter(user=request.user)
     return render(request, 'ioc_extractor/workspace.html', context)
+
+
+def phishing_analyzer(request):
+    """Dedicated phishing email investigation workspace."""
+    context = {
+        'is_guest_preview': not request.user.is_authenticated,
+        'guest_phishing_limit': GUEST_PHISHING_DAILY_LIMIT,
+    }
+    if request.user.is_authenticated:
+        context['conversations'] = Conversation.objects.filter(user=request.user)
+    return render(request, 'phishing_analyzer/workspace.html', context)
+
+
+@require_POST
+def phishing_analyze(request):
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid request format.'}, status=400)
+
+    email_text = str(data.get('email', ''))
+    if not email_text.strip():
+        return JsonResponse({'error': 'Paste suspicious email content or headers first.'}, status=400)
+    if len(email_text) > 75000:
+        return JsonResponse({'error': 'Input is too large. Paste 75,000 characters or fewer.'}, status=400)
+
+    allowed, remaining, limit = _consume_guest_limit(request, 'guest_phishing_usage', GUEST_PHISHING_DAILY_LIMIT)
+    if not allowed:
+        return JsonResponse({
+            'error': GUEST_LIMIT_MESSAGE,
+            'guest_limit_reached': True,
+            'limit': limit,
+            'remaining': remaining,
+        }, status=429)
+
+    result = _analyze_phishing_email(email_text, full_enrichment=request.user.is_authenticated)
+    return JsonResponse({
+        'result': result,
+        'guest_usage': None if request.user.is_authenticated else {
+            'limit': limit,
+            'remaining': remaining,
+        },
+    })
 
 
 @require_POST
