@@ -78,9 +78,9 @@
                     {{ puser.username|first|upper }}
                   </div>
                   <div class="min-w-0">
-                    <p class="font-semibold text-sm truncate max-w-[140px]">{{ puser.username }}</p>
+                    <p class="font-semibold text-sm truncate max-w-35">{{ puser.username }}</p>
                     {% if puser.get_full_name %}
-                    <p class="text-xs text-base-content/40 truncate max-w-[140px]">{{ puser.get_full_name }}</p>
+                    <p class="text-xs text-base-content/40 truncate max-w-35">{{ puser.get_full_name }}</p>
                     {% endif %}
                   </div>
                 </div>
@@ -143,21 +143,21 @@
                     {{ user.username|first|upper }}
                   </div>
                   <div class="min-w-0">
-                    <p class="font-semibold text-sm truncate max-w-[140px]">
+                    <p class="font-semibold text-sm truncate max-w-35">
                       {{ user.username }}
                       {% if user == request.user %}
                       <span class="text-xs text-base-content/30 font-normal">(you)</span>
                       {% endif %}
                     </p>
                     {% if user.get_full_name %}
-                    <p class="text-xs text-base-content/40 truncate max-w-[140px]">{{ user.get_full_name }}</p>
+                    <p class="text-xs text-base-content/40 truncate max-w-35">{{ user.get_full_name }}</p>
                     {% endif %}
                   </div>
                 </div>
               </td>
               <!-- Email (hidden on small screens) -->
               <td class="hidden md:table-cell">
-                <span class="text-sm text-base-content/70 truncate max-w-[180px] block">{{ user.email|default:"—" }}</span>
+                <span class="text-sm text-base-content/70 truncate max-w-45 block">{{ user.email|default:"—" }}</span>
               </td>
               <!-- Role badge -->
               <td>

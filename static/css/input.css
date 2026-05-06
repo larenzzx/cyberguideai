@@ -68,25 +68,25 @@
     width: 100%;
     max-width: 100vw;
     height: 100%;
-    height: 100dvh;
-    min-height: 100dvh;
-    max-height: 100dvh;
+    height: var(--chat-viewport-height, 100dvh);
+    min-height: var(--chat-viewport-height, 100dvh);
+    max-height: var(--chat-viewport-height, 100dvh);
     overflow: hidden;
     overscroll-behavior: none;
   }
 
   .chat-body.min-h-screen {
-    min-height: 100dvh;
+    min-height: var(--chat-viewport-height, 100dvh);
   }
 
   .chat-page {
     width: 100%;
     max-width: 100vw;
-    height: 100vh;
-    height: 100dvh;
+    height: var(--chat-viewport-height, 100dvh);
     min-height: 0;
-    max-height: 100dvh;
+    max-height: var(--chat-viewport-height, 100dvh);
     overflow: hidden;
+    transition: height 160ms ease, max-height 160ms ease;
   }
 
   .chat-page.drawer {

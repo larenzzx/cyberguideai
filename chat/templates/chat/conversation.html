@@ -222,11 +222,9 @@ function getCsrfToken() {
 }
 
 function scrollToBottom() {
-  const scroller = document.getElementById('messages-container');
-  if (!scroller) return;
-  requestAnimationFrame(() => {
-    scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' });
-  });
+  if (window.CyberGuideChat) {
+    window.CyberGuideChat.scrollPaneToBottom('messages-container', 'smooth');
+  }
 }
 
 function showError(message, isWarning) {
@@ -298,6 +296,10 @@ async function sendMessage() {
   appendUserMessage(messageText);
   input.value = '';
   input.style.height = 'auto';
+  if (window.CyberGuideChat && window.CyberGuideChat.isTouchDevice()) {
+    input.blur();
+    window.CyberGuideChat.refreshViewport();
+  }
   errorDiv.classList.add('hidden');
 
   // Move typing indicator to after the new user message, then show it
@@ -335,7 +337,11 @@ async function sendMessage() {
     sendButton.disabled = false;
     sendButton.classList.remove('loading');
     scrollToBottom();
-    input.focus();
+    if (window.CyberGuideChat && window.CyberGuideChat.shouldRefocusInput()) {
+      input.focus();
+    } else if (window.CyberGuideChat) {
+      window.CyberGuideChat.refreshViewport();
+    }
   }
 }
 
@@ -493,6 +499,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
   const input = document.getElementById('message-input');
   input.addEventListener('input', function() { autoResize(this); });
+  input.addEventListener('focus', function() {
+    if (window.CyberGuideChat) {
+      window.CyberGuideChat.refreshViewport();
+      setTimeout(function() { scrollToBottom(); }, 180);
+    }
+  });
+  input.addEventListener('blur', function() {
+    if (window.CyberGuideChat) {
+      window.CyberGuideChat.refreshViewport();
+      setTimeout(function() { scrollToBottom(); }, 180);
+    }
+  });
   input.addEventListener('keydown', function(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -504,7 +522,14 @@ document.addEventListener('DOMContentLoaded', function() {
   input.value = '{{ autofill|escapejs }}';
   autoResize(input);
   {% endif %}
-  input.focus();
+  if (window.CyberGuideChat && window.CyberGuideChat.shouldRefocusInput()) {
+    input.focus();
+  }
+  window.addEventListener('chat:viewportchange', function() {
+    if (window.CyberGuideChat) {
+      window.CyberGuideChat.scrollPaneToBottom('messages-container', 'auto');
+    }
+  });
 });
 </script>
 {% endblock %}
