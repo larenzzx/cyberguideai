@@ -9,8 +9,21 @@
   <link rel="stylesheet" href="{% static 'css/output.css' %}" />
 
   <style>
-    .chat-messages-container { scroll-behavior: smooth; }
+    .chat-messages-container {
+      scroll-behavior: smooth;
+      scrollbar-gutter: stable;
+    }
     textarea { resize: none; }
+    .chat-bubble.message-bubble {
+      max-width: min(42rem, calc(100vw - 5.5rem));
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: normal;
+      line-height: 1.55;
+    }
+    .chat-bubble.message-bubble > * {
+      max-width: 100%;
+    }
     .chat-bubble p { margin-bottom: 0.5rem; }
     .chat-bubble p:last-child { margin-bottom: 0; }
     .chat-bubble strong { font-weight: 700; }
@@ -28,6 +41,7 @@
       border-radius: 6px;
       overflow-x: auto;
       margin: 0.5rem 0;
+      max-width: 100%;
     }
     .chat-bubble pre code { background: none; padding: 0; }
   </style>

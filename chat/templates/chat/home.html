@@ -43,7 +43,7 @@
 
         <!-- Welcome Hero -->
         <div class="text-center mb-12">
-          <img src="{% static 'images/cyberguideai-logo.png' %}" alt="CyberGuide AI" class="w-24 h-24 rounded-2xl object-cover border border-cyan-400/20 shadow-lg mx-auto mb-5" />
+          <img src="{% static 'images/cyberguideai-logo.png' %}" alt="CyberGuide AI" class="w-24 h-24 rounded-2xl object-cover shadow-lg mx-auto mb-5" />
           <h1 class="text-3xl font-bold mb-2">
             Welcome back, <span class="text-primary">{{ request.user.first_name|default:request.user.username }}</span>
           </h1>

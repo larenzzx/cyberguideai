@@ -55,7 +55,7 @@
     </div>
 
     <!-- MESSAGES AREA -->
-    <div id="messages-container" class="flex-1 overflow-y-auto chat-messages-container p-4 pb-36">
+    <div id="messages-container" class="flex-1 min-h-0 overflow-y-auto chat-messages-container p-4">
 
       <!-- Welcome / empty state -->
       {% if not messages %}
@@ -99,7 +99,7 @@
           <div class="chat-header mb-1 text-xs text-base-content/40">
             {{ message.timestamp|date:"g:i A" }}
           </div>
-          <div class="chat-bubble chat-bubble-primary max-w-2xl">
+          <div class="chat-bubble chat-bubble-primary message-bubble">
             {{ message.content }}
           </div>
         </div>
@@ -113,7 +113,8 @@
           <div class="chat-header mb-1 text-xs text-base-content/40">
             CyberGuide AI · {{ message.timestamp|date:"g:i A" }}
           </div>
-          <div class="chat-bubble max-w-2xl" data-raw="{{ message.content|escapejs }}"></div>
+          <div class="chat-bubble message-bubble" data-formatted-message></div>
+          <script type="application/json" class="message-raw">"{{ message.content|escapejs }}"</script>
         </div>
         {% endif %}
       {% endfor %}
@@ -134,8 +135,8 @@
       <div id="scroll-anchor"></div>
     </div>
 
-    <!-- FIXED INPUT BAR -->
-    <div class="fixed bottom-0 left-0 right-0 lg:left-72 bg-base-300 border-t border-base-300/50 px-4 pt-3 pb-4 z-10">
+    <!-- INPUT BAR -->
+    <div class="flex-none bg-base-300 border-t border-base-300/50 px-4 pt-3 pb-4 z-10">
       <div class="max-w-3xl mx-auto">
 
         <!-- Error display -->
@@ -250,7 +251,7 @@ function appendUserMessage(text) {
       </div>
     </div>
     <div class="chat-header mb-1 text-xs text-base-content/40">Just now</div>
-    <div class="chat-bubble chat-bubble-primary max-w-2xl"></div>
+    <div class="chat-bubble chat-bubble-primary message-bubble"></div>
   `;
   div.querySelector('.chat-bubble').textContent = text;
   container.insertBefore(div, anchor);
@@ -269,7 +270,7 @@ function appendAssistantMessage(text) {
       </div>
     </div>
     <div class="chat-header mb-1 text-xs text-base-content/40">CyberGuide AI · Just now</div>
-    <div class="chat-bubble max-w-2xl"></div>
+    <div class="chat-bubble message-bubble"></div>
   `;
   div.querySelector('.chat-bubble').innerHTML = formatMessage(text);
   container.insertBefore(div, anchor);
@@ -401,8 +402,8 @@ function formatMessage(text) {
     if (hm) {
       flushList();
       const lvl = hm[1].length;
-      const szMap = ['text-2xl','text-xl','text-lg','text-base','text-sm','text-xs'];
-      out.push(`<h${lvl} class="font-bold ${szMap[lvl-1]} mb-2 mt-3">${hm[2]}</h${lvl}>`);
+      const szMap = ['text-lg','text-base','text-base','text-sm','text-sm','text-xs'];
+      out.push(`<h${lvl} class="font-semibold ${szMap[lvl-1]} mb-2 mt-3">${hm[2]}</h${lvl}>`);
       continue;
     }
 
@@ -473,8 +474,15 @@ function formatMessage(text) {
 
 document.addEventListener('DOMContentLoaded', function() {
   // Format all assistant messages that were rendered from the database
-  document.querySelectorAll('[data-raw]').forEach(el => {
-    el.innerHTML = formatMessage(el.dataset.raw);
+  document.querySelectorAll('[data-formatted-message]').forEach(el => {
+    const rawScript = el.parentElement.querySelector('.message-raw');
+    if (!rawScript) return;
+
+    try {
+      el.innerHTML = formatMessage(JSON.parse(rawScript.textContent));
+    } catch (error) {
+      el.textContent = rawScript.textContent;
+    }
   });
 
   const input = document.getElementById('message-input');
