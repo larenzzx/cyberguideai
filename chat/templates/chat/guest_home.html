@@ -9,7 +9,7 @@
 <div class="chat-page flex flex-col bg-base-100">
 
   <!-- NAVBAR -->
-  <nav class="navbar bg-base-200/95 border-b border-primary/10 sticky top-0 z-10 shadow-sm px-4 py-2 flex-wrap gap-2 sm:flex-nowrap">
+  <nav class="navbar flex-none bg-base-200/95 border-b border-primary/10 sticky top-0 z-10 shadow-sm px-4 py-2 flex-wrap gap-2 sm:flex-nowrap">
     <div class="w-full sm:w-auto sm:flex-1 flex items-center gap-3 min-w-0">
       <img src="{% static 'images/cyberguideai-logo.png' %}" alt="CyberGuide AI" class="w-9 h-9 rounded-lg object-cover shrink-0" />
       <div class="min-w-0">
@@ -25,7 +25,7 @@
   </nav>
 
   <!-- MAIN AREA -->
-  <main class="chat-scroll flex-1 overflow-y-auto" id="main-area">
+  <main class="chat-scroll flex-1 min-h-0 overflow-y-auto" id="main-area">
 
     <!-- WELCOME STATE — hidden after first message -->
     <div id="welcome-state" class="flex min-h-full flex-col items-center justify-center px-4 py-6 sm:py-12">
@@ -171,7 +171,11 @@ function getCsrfToken() {
 }
 
 function scrollToBottom() {
-  document.getElementById('scroll-anchor').scrollIntoView({ behavior: 'smooth' });
+  const scroller = document.getElementById('main-area');
+  if (!scroller) return;
+  requestAnimationFrame(() => {
+    scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' });
+  });
 }
 
 function autoResize(el) {
@@ -198,7 +202,7 @@ function appendUserMessage(text) {
   const div = document.createElement('div');
   div.className = 'chat chat-end';
   div.innerHTML = `
-    <div class="chat-bubble bg-primary text-primary-content">
+    <div class="chat-bubble bg-primary text-primary-content message-bubble">
       ${formatMessage(text)}
     </div>`;
   container.appendChild(div);
@@ -215,7 +219,7 @@ function appendAssistantMessage(text) {
         <img src="{% static 'images/cyberguideai-logo.png' %}" alt="AI" class="w-8 h-8 object-cover" />
       </div>
     </div>
-    <div class="chat-bubble bg-base-200 text-base-content">
+    <div class="chat-bubble bg-base-200 text-base-content message-bubble">
       ${formatMessage(text)}
     </div>`;
   container.appendChild(div);

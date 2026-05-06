@@ -222,8 +222,11 @@ function getCsrfToken() {
 }
 
 function scrollToBottom() {
-  const anchor = document.getElementById('scroll-anchor');
-  if (anchor) anchor.scrollIntoView({ behavior: 'smooth' });
+  const scroller = document.getElementById('messages-container');
+  if (!scroller) return;
+  requestAnimationFrame(() => {
+    scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' });
+  });
 }
 
 function showError(message, isWarning) {
@@ -358,7 +361,7 @@ function formatMessage(text) {
     const esc = code.trim()
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     blocks.push(
-      `<pre class="bg-base-300 font-mono text-sm p-3 rounded-lg overflow-x-auto border border-base-content/10 my-2"><code>${esc}</code></pre>`
+      `<pre class="bg-base-300 font-mono text-sm p-3 rounded-lg border border-base-content/10 my-2"><code>${esc}</code></pre>`
     );
     return `\x01BLK${i}\x01`;
   });
