@@ -63,6 +63,22 @@
 }
 
 @layer components {
+  .chat-page {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .chat-page .drawer-content {
+    min-height: 0;
+  }
+
+  .chat-scroll {
+    min-height: 0;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
   .navbar {
     backdrop-filter: blur(14px);
   }

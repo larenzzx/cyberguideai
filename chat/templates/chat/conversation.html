@@ -2,13 +2,14 @@
 {% load static %}
 
 {% block title %}{{ conversation.title }} — CyberGuide AI{% endblock %}
+{% block django_messages %}{% endblock %}
 
 {% block content %}
-<div class="drawer lg:drawer-open">
+<div class="chat-page drawer lg:drawer-open">
   <input id="sidebar-drawer" type="checkbox" class="drawer-toggle" />
 
   <!-- MAIN CHAT AREA -->
-  <div class="drawer-content flex flex-col h-screen">
+  <div class="drawer-content flex flex-col">
 
     <!-- NAVBAR -->
     <div class="navbar bg-base-200/95 border-b border-primary/10 sticky top-0 z-10 shadow-sm flex-none px-4">
@@ -55,7 +56,7 @@
     </div>
 
     <!-- MESSAGES AREA -->
-    <div id="messages-container" class="flex-1 min-h-0 overflow-y-auto chat-messages-container p-4">
+    <div id="messages-container" class="chat-scroll flex-1 overflow-y-auto chat-messages-container p-4">
 
       <!-- Welcome / empty state -->
       {% if not messages %}

@@ -50,6 +50,7 @@
 </head>
 <body class="bg-base-100 text-base-content min-h-screen">
 
+  {% block django_messages %}
   <!-- Django messages — toast notifications (auto-dismiss after 4s) -->
   {% if messages %}
   <div id="django-toasts" class="toast toast-top toast-end z-[999] pt-4 pr-4">
@@ -84,6 +85,7 @@
     }, 4000);
   </script>
   {% endif %}
+  {% endblock %}
 
   {% block content %}{% endblock %}
 
