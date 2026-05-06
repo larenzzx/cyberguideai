@@ -2,6 +2,8 @@
 {% load static %}
 
 {% block title %}CyberGuide AI — Cybersecurity Assistant{% endblock %}
+{% block html_class %}chat-root{% endblock %}
+{% block body_class %}chat-body{% endblock %}
 
 {% block content %}
 <div class="chat-page flex flex-col bg-base-100">
@@ -26,7 +28,7 @@
   <main class="chat-scroll flex-1 overflow-y-auto" id="main-area">
 
     <!-- WELCOME STATE — hidden after first message -->
-    <div id="welcome-state" class="flex flex-col items-center justify-center px-4 py-12" style="min-height: calc(100vh - 240px);">
+    <div id="welcome-state" class="flex min-h-full flex-col items-center justify-center px-4 py-6 sm:py-12">
       <img src="{% static 'images/cyberguideai-logo.png' %}" alt="CyberGuide AI" class="w-24 h-24 rounded-2xl object-cover shadow-lg mb-5" />
       <h1 class="text-3xl font-bold mb-2 text-center">CyberGuide AI</h1>
       <p class="text-base-content/60 text-base max-w-2xl text-center mb-10">

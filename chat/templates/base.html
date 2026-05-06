@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="cyberguide">
+<html lang="en" data-theme="cyberguide" class="{% block html_class %}{% endblock %}">
 {% load static %}
 <head>
   <meta charset="UTF-8" />
@@ -48,7 +48,7 @@
 
   {% block extra_head %}{% endblock %}
 </head>
-<body class="bg-base-100 text-base-content min-h-screen">
+<body class="bg-base-100 text-base-content min-h-screen {% block body_class %}{% endblock %}">
 
   {% block django_messages %}
   <!-- Django messages — toast notifications (auto-dismiss after 4s) -->
