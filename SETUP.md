@@ -1,4 +1,4 @@
-# CyberGuide AI Setup and PythonAnywhere Deployment Guide
+# CyberGuide AI Setup and PythonAnywhere Deployment Guide.
 
 CyberGuide AI is a Django web app with TailwindCSS/DaisyUI styling, Groq-powered AI chat, threat intelligence lookup, IOC extraction, and phishing analysis.
 
