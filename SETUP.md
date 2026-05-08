@@ -10,6 +10,7 @@ CyberGuide AI is a Django app with a Tailwind CSS frontend. Local development us
 - Groq API key for AI chat
 - VirusTotal API key for Threat Intelligence Lookup
 - Optional AbuseIPDB and AlienVault OTX API keys for extra enrichment
+- SMTP email account for approval notifications
 
 ## Local Setup
 
@@ -30,9 +31,16 @@ GROQ_API_KEY=your-groq-api-key
 VIRUSTOTAL_API_KEY=your-virustotal-api-key
 ABUSEIPDB_API_KEY=your-abuseipdb-api-key
 OTX_API_KEY=your-otx-api-key
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USE_TLS=True
+EMAIL_HOST_USER=your-email@example.com
+EMAIL_HOST_PASSWORD=your-email-app-password
+DEFAULT_FROM_EMAIL=CyberGuide AI <your-email@example.com>
 ```
 
 Do not commit `.env`. Keep API keys server-side only.
+For Gmail, use a Google App Password instead of your normal account password.
 
 Install and run the backend:
 
@@ -127,6 +135,12 @@ GROQ_API_KEY=your-production-groq-key
 VIRUSTOTAL_API_KEY=your-production-virustotal-key
 ABUSEIPDB_API_KEY=your-production-abuseipdb-key
 OTX_API_KEY=your-production-otx-key
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USE_TLS=True
+EMAIL_HOST_USER=your-production-email@example.com
+EMAIL_HOST_PASSWORD=your-production-email-app-password
+DEFAULT_FROM_EMAIL=CyberGuide AI <your-production-email@example.com>
 ```
 
 For a different Render URL, replace `cyberguideai.onrender.com` with the exact hostname shown in your Render web service.
@@ -212,6 +226,19 @@ If AI chat does not respond, confirm:
 ```env
 GROQ_API_KEY
 ```
+
+If account approval emails are not sent after an admin approves a pending user, confirm:
+
+```env
+EMAIL_HOST
+EMAIL_PORT
+EMAIL_USE_TLS
+EMAIL_HOST_USER
+EMAIL_HOST_PASSWORD
+DEFAULT_FROM_EMAIL
+```
+
+For Gmail, the password must be an App Password.
 
 ## Updating Production
 

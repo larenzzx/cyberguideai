@@ -53,6 +53,7 @@ Results include verdicts, detection data, reputation signals, categories, source
 - User registration and login
 - Staff/admin user management
 - User approval workflow
+- Email notification when an admin approves a pending account
 - Profile page
 - Forced password change support for admin-created users
 - Custom confirmation modals instead of browser default alerts

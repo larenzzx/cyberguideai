@@ -16,6 +16,7 @@ import httpx
 
 from django.conf import settings
 from django.core.cache import cache
+from django.core.mail import BadHeaderError, send_mail
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
@@ -108,6 +109,40 @@ def _get_env_secret(name):
 
 def _get_virustotal_api_key():
     return _get_env_secret('VIRUSTOTAL_API_KEY')
+
+
+def _approval_email_configured():
+    return bool(
+        getattr(settings, 'EMAIL_HOST', '')
+        and getattr(settings, 'EMAIL_HOST_USER', '')
+        and getattr(settings, 'DEFAULT_FROM_EMAIL', '')
+    )
+
+
+def _send_account_approval_email(request, user):
+    if not user.email:
+        return False, 'The user does not have an email address.'
+    if not _approval_email_configured():
+        return False, 'Email is not configured. Add SMTP settings before approval emails can be sent.'
+
+    login_url = request.build_absolute_uri('/login/')
+    subject = 'Your CyberGuide AI account has been approved'
+    body = (
+        f'Hello {user.get_full_name() or user.username},\n\n'
+        'Your CyberGuide AI account has been approved. You can now sign in using the account you registered.\n\n'
+        f'Login: {login_url}\n\n'
+        'If you did not request this account, please ignore this message or contact the site administrator.\n\n'
+        'CyberGuide AI'
+    )
+
+    try:
+        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=False)
+    except BadHeaderError as exc:
+        return False, str(exc)
+    except Exception as exc:
+        return False, str(exc)
+
+    return True, ''
 
 
 _HASH_PATTERNS = {
@@ -1650,7 +1685,15 @@ def admin_approve_user(request, user_id):
     user = get_object_or_404(User, id=user_id, is_active=False)
     user.is_active = True
     user.save()
-    messages.success(request, f"Account for '{user.username}' has been approved. They can now sign in.")
+
+    sent, error = _send_account_approval_email(request, user)
+    if sent:
+        messages.success(request, f"Account for '{user.username}' has been approved and an email notification was sent.")
+    else:
+        messages.warning(
+            request,
+            f"Account for '{user.username}' has been approved, but the email notification was not sent. {error}"
+        )
     return redirect('/users/')
 
 
