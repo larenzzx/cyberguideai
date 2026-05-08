@@ -1,98 +1,83 @@
 # CyberGuide AI
 
-CyberGuide AI is a cybersecurity-focused AI assistant and threat intelligence platform designed to help with SOC operations, networking, Microsoft 365 guidance, and IT/helpdesk troubleshooting.
+CyberGuide AI is a cybersecurity, networking, Microsoft tools, and IT/helpdesk operations assistant built with Django. It combines an AI guidance chatbot with practical investigation tools for threat intelligence, IOC extraction, and phishing email analysis.
 
-The platform combines AI-assisted cybersecurity guidance with integrated threat intelligence tools such as VirusTotal, AbuseIPDB, and AlienVault OTX to provide fast and centralized investigation workflows.
+The app is designed for SOC analysts, helpdesk users, IT administrators, and cybersecurity learners who need a focused workspace for investigation and operational guidance.
 
----
+## Features
 
-# Features
+### AI Assistant
 
-## AI Cybersecurity Assistant
+- Guest chat available without an account
+- Authenticated chat with saved conversations
+- Cybersecurity concept explanations
+- SOC analyst workflow guidance
+- Networking troubleshooting support
+- Microsoft 365, Entra ID, Intune, Defender, Exchange, SharePoint, and helpdesk guidance
+- General best-practice responses without tenant-specific or client-specific instructions
 
-* Cybersecurity guidance and explanations
-* SOC analyst assistance
-* Networking troubleshooting
-* Microsoft 365 and helpdesk guidance
-* General security investigation support
+### Threat Intelligence Lookup
 
-## Threat Intelligence Lookup
+Submit one indicator and CyberGuide AI detects the type automatically:
 
-Supports:
+- IP address
+- Domain
+- URL
+- MD5, SHA1, or SHA256 hash
 
-* IP addresses
-* Domains
-* URLs
-* MD5 / SHA1 / SHA256 hashes
+Integrated enrichment sources:
 
-Integrated Threat Intelligence Sources:
+- VirusTotal
+- AbuseIPDB
+- AlienVault OTX
 
-* VirusTotal
-* AbuseIPDB
-* AlienVault OTX
+Results include verdicts, detection data, reputation signals, categories, source-specific stats, and a short investigation summary.
 
-## Combined Threat Verdict
+### IOC Extractor
 
-CyberGuide AI combines multiple threat intelligence sources to provide:
+- Extracts indicators from pasted investigation text
+- Supports common observables such as IPs, domains, URLs, and hashes
+- Can enrich extracted indicators through the threat intelligence workflow
+- Helps analysts move from raw text to actionable indicators quickly
 
-* Risk score
-* Malicious/suspicious verdicts
-* Investigation summaries
-* Recommended SOC actions
+### Phishing Analyzer
 
----
+- Analyzes suspicious email content
+- Supports `.eml` drag/drop upload for logged-in users
+- Extracts email metadata and indicators
+- Sends extracted indicators into threat intelligence enrichment
+- Provides analyst-focused findings for phishing review
 
-# Core Capabilities
+### User And Access Management
 
-CyberGuide AI helps centralize cybersecurity investigation and operational workflows into a single platform.
+- User registration and login
+- Staff/admin user management
+- User approval workflow
+- Profile page
+- Forced password change support for admin-created users
+- Custom confirmation modals instead of browser default alerts
 
-The application is designed to:
+### Deployment Support
 
-* Assist SOC analysts during investigations
-* Provide cybersecurity and networking guidance
-* Help troubleshoot Microsoft 365 and IT/helpdesk issues
-* Analyze indicators of compromise (IOCs)
-* Aggregate threat intelligence from multiple sources
-* Deliver AI-assisted security insights and recommendations
+- SQLite fallback for local development
+- PostgreSQL support for production through `DATABASE_URL`
+- Render-ready deployment using `gunicorn`, `build.sh`, and `render.yaml`
+- WhiteNoise static file serving
+- Environment-variable based secret and API key handling
 
-The platform combines conversational AI with real-world threat intelligence integrations to streamline analysis and reduce the need to switch between multiple external tools.
+## Tech Stack
 
----
+- Django 6
+- PostgreSQL for production
+- SQLite for local development
+- Gunicorn
+- WhiteNoise
+- Tailwind CSS
+- DaisyUI-style utility classes and custom dark cybersecurity UI
+- Groq API for AI chat
+- VirusTotal, AbuseIPDB, and AlienVault OTX for threat intelligence enrichment
 
-# Threat Intelligence Sources
 
-CyberGuide AI currently integrates with:
+## Disclaimer
 
-* VirusTotal
-* AbuseIPDB
-* AlienVault OTX
-
-These integrations help provide:
-
-* Reputation checks
-* Malicious indicator detection
-* Threat pulse correlation
-* Risk scoring
-* Investigation summaries
-
----
-
-# Use Cases
-
-CyberGuide AI can be used for:
-
-* Threat intelligence enrichment
-* Security investigations
-* SOC analyst training
-* Networking troubleshooting
-* Microsoft 365 operational guidance
-* Helpdesk support workflows
-* Cybersecurity learning and research
-
----
-
-# Disclaimer
-
-CyberGuide AI is intended for educational, research, internal security operations, and cybersecurity learning purposes.
-
-Threat intelligence results from public APIs should not be treated as the sole source of truth for incident response decisions.
+CyberGuide AI is intended for cybersecurity learning, research, helpdesk operations, and internal security investigation support. Validate findings with authoritative sources and your organization's approved processes before taking action in production environments.
