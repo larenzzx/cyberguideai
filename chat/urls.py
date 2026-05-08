@@ -23,6 +23,7 @@ urlpatterns = [
     path('ioc-extractor/summary/', views.ioc_summary, name='ioc_summary'),
     path('phishing-analyzer/', views.phishing_analyzer, name='phishing_analyzer'),
     path('phishing-analyzer/analyze/', views.phishing_analyze, name='phishing_analyze'),
+    path('phishing-analyzer/upload-eml/', views.phishing_upload_eml, name='phishing_upload_eml'),
 
     # Chat (login required)
     path('chat/', views.chat_home, name='chat_home'),
