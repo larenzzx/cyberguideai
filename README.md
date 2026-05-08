@@ -78,6 +78,22 @@ Results include verdicts, detection data, reputation signals, categories, source
 - Groq API for AI chat
 - VirusTotal, AbuseIPDB, and AlienVault OTX for threat intelligence enrichment
 
+## Production Email
+
+CyberGuide AI can email users after an admin approves their pending account. Configure SMTP values in the hosting platform environment:
+
+```env
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USE_TLS=True
+EMAIL_HOST_USER=your-email@example.com
+EMAIL_HOST_PASSWORD=your-email-app-password
+DEFAULT_FROM_EMAIL=CyberGuide AI <your-email@example.com>
+EMAIL_TIMEOUT=10
+```
+
+For Gmail, use a Google App Password instead of your normal password.
+
 
 ## Disclaimer
 

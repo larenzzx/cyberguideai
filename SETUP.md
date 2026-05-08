@@ -37,6 +37,7 @@ EMAIL_USE_TLS=True
 EMAIL_HOST_USER=your-email@example.com
 EMAIL_HOST_PASSWORD=your-email-app-password
 DEFAULT_FROM_EMAIL=CyberGuide AI <your-email@example.com>
+EMAIL_TIMEOUT=10
 ```
 
 Do not commit `.env`. Keep API keys server-side only.
@@ -141,6 +142,7 @@ EMAIL_USE_TLS=True
 EMAIL_HOST_USER=your-production-email@example.com
 EMAIL_HOST_PASSWORD=your-production-email-app-password
 DEFAULT_FROM_EMAIL=CyberGuide AI <your-production-email@example.com>
+EMAIL_TIMEOUT=10
 ```
 
 For a different Render URL, replace `cyberguideai.onrender.com` with the exact hostname shown in your Render web service.
@@ -236,6 +238,7 @@ EMAIL_USE_TLS
 EMAIL_HOST_USER
 EMAIL_HOST_PASSWORD
 DEFAULT_FROM_EMAIL
+EMAIL_TIMEOUT
 ```
 
 For Gmail, the password must be an App Password.
