@@ -95,6 +95,15 @@ function setAnalyzeLoading(isLoading) {
   document.getElementById('analyze-text').textContent = isLoading ? 'Analyzing' : 'Analyze Email';
 }
 
+function setUploadStatus(message, isError) {
+  const status = document.getElementById('eml-upload-status');
+  if (!status) return;
+  status.textContent = message || '';
+  status.classList.toggle('hidden', !message);
+  status.classList.toggle('text-error', isError === true);
+  status.classList.toggle('text-base-content/50', isError !== true);
+}
+
 function showAnalyzerError(message) {
   document.getElementById('analyzer-error-text').textContent = message;
   document.getElementById('analyzer-error').classList.remove('hidden');
@@ -275,14 +284,92 @@ async function analyzeEmail() {
   }
 }
 
+async function uploadEmlFile(file) {
+  if (!file) return;
+  if (!file.name.toLowerCase().endsWith('.eml')) {
+    showAnalyzerError('Upload a valid .eml file.');
+    return;
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    showAnalyzerError('The .eml file is too large. Upload a file 2 MB or smaller.');
+    return;
+  }
+
+  clearAnalyzerError();
+  setAnalyzeLoading(true);
+  setUploadStatus(`Uploading ${file.name}...`, false);
+
+  const formData = new FormData();
+  formData.append('eml_file', file);
+
+  try {
+    const response = await fetch('/phishing-analyzer/upload-eml/', {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': getCsrfToken(),
+      },
+      body: formData,
+    });
+    const data = await response.json();
+    if (!response.ok || data.error) {
+      showAnalyzerError(data.error || 'Could not upload the .eml file.');
+      setUploadStatus(data.error || 'Upload failed.', true);
+      return;
+    }
+
+    document.getElementById('email-input').value = data.email_text || '';
+    document.getElementById('email-source-label').textContent = data.filename || file.name;
+    renderAnalysis(data.result);
+    setUploadStatus(`Analyzed ${data.filename || file.name}.`, false);
+  } catch (error) {
+    showAnalyzerError('Network error during .eml upload.');
+    setUploadStatus('Upload failed because of a network error.', true);
+  } finally {
+    setAnalyzeLoading(false);
+  }
+}
+
 function clearAnalyzer() {
   document.getElementById('email-input').value = '';
   document.getElementById('analysis-result').classList.add('hidden');
+  const sourceLabel = document.getElementById('email-source-label');
+  if (sourceLabel) sourceLabel.textContent = 'suspicious-email.eml';
+  setUploadStatus('', false);
   clearAnalyzerError();
 }
 
 function copyText(value) {
   navigator.clipboard.writeText(value).catch(function() {});
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+  const dropZone = document.getElementById('eml-drop-zone');
+  const fileInput = document.getElementById('eml-file-input');
+  if (!dropZone || !fileInput) return;
+
+  fileInput.addEventListener('change', function() {
+    uploadEmlFile(fileInput.files[0]);
+    fileInput.value = '';
+  });
+
+  ['dragenter', 'dragover'].forEach(function(eventName) {
+    dropZone.addEventListener(eventName, function(event) {
+      event.preventDefault();
+      dropZone.classList.add('border-primary', 'bg-primary/10');
+    });
+  });
+
+  ['dragleave', 'drop'].forEach(function(eventName) {
+    dropZone.addEventListener(eventName, function(event) {
+      event.preventDefault();
+      dropZone.classList.remove('border-primary', 'bg-primary/10');
+    });
+  });
+
+  dropZone.addEventListener('drop', function(event) {
+    const file = event.dataTransfer.files[0];
+    uploadEmlFile(file);
+  });
+});
 </script>
 {% endblock %}

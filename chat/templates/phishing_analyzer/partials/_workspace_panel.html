@@ -60,8 +60,8 @@
     <div class="p-4 sm:p-5">
       <div class="rounded-lg bg-base-100 border border-base-300 focus-within:border-primary/60 transition-colors overflow-hidden">
         <div class="flex items-center justify-between gap-3 px-3 py-2 border-b border-base-300 bg-base-300/40">
-          <span class="text-xs text-base-content/40 font-mono truncate">suspicious-email.eml</span>
-          <span class="text-xs text-base-content/40 hidden sm:inline">Paste-only analyzer</span>
+          <span id="email-source-label" class="text-xs text-base-content/40 font-mono truncate">suspicious-email.eml</span>
+          <span class="text-xs text-base-content/40 hidden sm:inline">{% if request.user.is_authenticated %}Paste or upload .eml{% else %}Paste-only preview{% endif %}</span>
         </div>
         <textarea
           id="email-input"
@@ -71,9 +71,28 @@
         ></textarea>
       </div>
 
-      <div class="mt-3 rounded-lg border border-dashed border-base-300 bg-base-300/30 px-4 py-3 text-sm text-base-content/50">
-        Future-ready: .eml drag/drop upload can be added here. Current version analyzes pasted content only.
+      {% if request.user.is_authenticated %}
+      <div
+        id="eml-drop-zone"
+        class="mt-3 rounded-lg border border-dashed border-primary/40 bg-primary/5 px-4 py-5 text-sm text-base-content/70 transition-colors"
+      >
+        <input id="eml-file-input" type="file" accept=".eml,message/rfc822" class="hidden" />
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <p class="font-semibold text-base-content">Drag and drop a `.eml` file</p>
+            <p class="text-xs text-base-content/50 mt-1">Or choose a file to parse headers, body, links, and attachment metadata. Max 2 MB.</p>
+          </div>
+          <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('eml-file-input').click()">
+            Choose .eml
+          </button>
+        </div>
+        <div id="eml-upload-status" class="text-xs text-base-content/50 mt-3 hidden"></div>
       </div>
+      {% else %}
+      <div class="mt-3 rounded-lg border border-dashed border-base-300 bg-base-300/30 px-4 py-3 text-sm text-base-content/50">
+        Log in with an approved account to upload `.eml` files. Guest preview supports pasted content only.
+      </div>
+      {% endif %}
 
       <div id="analyzer-error" class="alert alert-error mt-4 hidden">
         <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">

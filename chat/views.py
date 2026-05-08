@@ -1,6 +1,8 @@
 import json
 import os
 import base64
+from email import policy
+from email.parser import BytesParser
 import hashlib
 import ipaddress
 import re
@@ -64,6 +66,9 @@ Response style:
 # =============================================================================
 # HELPERS
 # =============================================================================
+
+MAX_EML_UPLOAD_BYTES = 2 * 1024 * 1024
+MAX_PHISHING_EXTERNAL_LOOKUPS = 40
 
 def staff_required(view_func):
     """Decorator: requires authenticated + is_staff. Redirects accordingly."""
@@ -600,6 +605,48 @@ def _build_threat_intel_result(indicator):
     }
 
 
+def _email_address_threat_intel_result(email_address):
+    sources = [
+        _source_result('VirusTotal', 'virustotal', 'Not applicable', summary='Email address enrichment is not supported by this lookup.'),
+        _source_result('AbuseIPDB', 'abuseipdb', 'Not applicable', summary='AbuseIPDB is used for IP address indicators only.'),
+        _source_result('AlienVault OTX', 'otx', 'Not applicable', summary='OTX email address enrichment is not enabled in this workspace.'),
+    ]
+    return {
+        'indicator': email_address,
+        'indicator_type': 'email_address',
+        'combined': _combined_verdict('email_address', sources),
+        'sources': sources,
+    }
+
+
+def _lookup_error_threat_intel_result(indicator, indicator_type, summary):
+    sources = [
+        _source_result('VirusTotal', 'virustotal', 'Error', summary=summary),
+        _source_result('AbuseIPDB', 'abuseipdb', 'Error', summary=summary),
+        _source_result('AlienVault OTX', 'otx', 'Error', summary=summary),
+    ]
+    return {
+        'indicator': indicator,
+        'indicator_type': indicator_type,
+        'combined': _combined_verdict(indicator_type, sources),
+        'sources': sources,
+    }
+
+
+def _not_analyzed_threat_intel_result(indicator, indicator_type):
+    sources = [
+        _source_result('VirusTotal', 'virustotal', 'Not analyzed', summary='Lookup skipped to avoid excessive external requests from one email.'),
+        _source_result('AbuseIPDB', 'abuseipdb', 'Not analyzed', summary='Lookup skipped to avoid excessive external requests from one email.'),
+        _source_result('AlienVault OTX', 'otx', 'Not analyzed', summary='Lookup skipped to avoid excessive external requests from one email.'),
+    ]
+    return {
+        'indicator': indicator,
+        'indicator_type': indicator_type,
+        'combined': _combined_verdict(indicator_type, sources),
+        'sources': sources,
+    }
+
+
 def _normalize_obfuscated_url(value):
     normalized = re.sub(r'^hxxp', 'http', value, flags=re.IGNORECASE)
     normalized = normalized.replace('[.]', '.').replace('(.)', '.')
@@ -896,19 +943,46 @@ def _enrich_extracted_for_phishing(extracted, full_enrichment):
         return []
 
     candidates = []
-    for group_key in ('ip_addresses', 'domains', 'urls', 'hashes'):
+    for group_key in ('ip_addresses', 'domains', 'urls', 'hashes', 'email_addresses'):
         for item in extracted['groups'].get(group_key, []):
-            lookup_value = item.get('lookup_value') or item.get('value')
+            value = item.get('value') or ''
+            lookup_value = item.get('lookup_value') or value
+            if group_key == 'email_addresses' and _EMAIL_PATTERN.fullmatch(value):
+                candidates.append({
+                    'indicator': value.lower(),
+                    'indicator_type': 'email_address',
+                    'lookup_value': value.lower(),
+                    'external_lookup': False,
+                })
+                continue
+
             indicator_type, normalized = _detect_indicator(lookup_value)
             if indicator_type:
-                candidates.append(normalized)
+                candidates.append({
+                    'indicator': normalized,
+                    'indicator_type': indicator_type,
+                    'lookup_value': normalized,
+                    'external_lookup': True,
+                })
 
     enriched = []
     seen = set()
-    for indicator in candidates[:12]:
-        if indicator in seen:
+    external_count = 0
+    for candidate in candidates:
+        indicator = candidate['indicator']
+        if (candidate['indicator_type'], indicator) in seen:
             continue
-        seen.add(indicator)
+        seen.add((candidate['indicator_type'], indicator))
+
+        if not candidate['external_lookup']:
+            enriched.append(_email_address_threat_intel_result(indicator))
+            continue
+
+        if external_count >= MAX_PHISHING_EXTERNAL_LOOKUPS:
+            enriched.append(_not_analyzed_threat_intel_result(indicator, candidate['indicator_type']))
+            continue
+
+        external_count += 1
         cache_key = 'phishing-enrich:' + hashlib.sha256(indicator.encode()).hexdigest()
         cached = cache.get(cache_key)
         if cached:
@@ -917,9 +991,14 @@ def _enrich_extracted_for_phishing(extracted, full_enrichment):
         try:
             result = _build_threat_intel_result(indicator)
         except (httpx.TimeoutException, httpx.RequestError):
-            continue
-        cache.set(cache_key, result, 600)
-        enriched.append(result)
+            result = _lookup_error_threat_intel_result(
+                indicator,
+                candidate['indicator_type'],
+                'Threat intelligence lookup could not be completed because an external source connection failed.',
+            )
+        if result:
+            cache.set(cache_key, result, 600)
+            enriched.append(result)
     return enriched
 
 
@@ -945,6 +1024,98 @@ def _analyze_phishing_email(text, full_enrichment=True):
         'enriched_indicators': enriched,
         'full_enrichment': full_enrichment,
     }
+
+
+def _part_text(part):
+    try:
+        content = part.get_content()
+    except Exception:
+        payload = part.get_payload(decode=True) or b''
+        charset = part.get_content_charset() or 'utf-8'
+        content = payload.decode(charset, errors='replace')
+
+    if part.get_content_type() == 'text/html':
+        content = re.sub(r'(?is)<(script|style).*?>.*?</\1>', ' ', content)
+        content = re.sub(r'(?s)<[^>]+>', ' ', content)
+        content = re.sub(r'\s+', ' ', content)
+    return str(content).strip()
+
+
+def _parse_eml_upload(uploaded_file):
+    name = uploaded_file.name or 'uploaded-email.eml'
+    lower_name = name.lower()
+    if not lower_name.endswith('.eml'):
+        raise ValueError('Upload a valid .eml file.')
+
+    data = uploaded_file.read(MAX_EML_UPLOAD_BYTES + 1)
+    if len(data) > MAX_EML_UPLOAD_BYTES:
+        raise ValueError('The .eml file is too large. Upload a file 2 MB or smaller.')
+    if not data.strip():
+        raise ValueError('The uploaded .eml file is empty.')
+
+    try:
+        message = BytesParser(policy=policy.default).parsebytes(data)
+    except Exception as exc:
+        raise ValueError('Could not parse the .eml file.') from exc
+
+    header_names = [
+        'From', 'To', 'Cc', 'Bcc', 'Reply-To', 'Return-Path', 'Subject',
+        'Date', 'Message-ID', 'Authentication-Results', 'Received-SPF',
+        'DKIM-Signature', 'ARC-Authentication-Results',
+    ]
+    lines = ['Uploaded .eml file parsed server-side.', '', 'Selected Headers:']
+    for header in header_names:
+        values = message.get_all(header, [])
+        for value in values[:5]:
+            lines.append(f'{header}: {value}')
+
+    received_headers = message.get_all('Received', [])
+    if received_headers:
+        lines.extend(['', 'Received Chain:'])
+        for received in received_headers[:12]:
+            lines.append(f'Received: {received}')
+
+    body_parts = []
+    attachments = []
+    if message.is_multipart():
+        for part in message.walk():
+            if part.is_multipart():
+                continue
+            disposition = part.get_content_disposition()
+            filename = part.get_filename()
+            content_type = part.get_content_type()
+            payload = part.get_payload(decode=True) or b''
+            if disposition == 'attachment' or filename:
+                attachments.append({
+                    'filename': filename or '(unnamed attachment)',
+                    'content_type': content_type,
+                    'size': len(payload),
+                })
+                continue
+            if content_type in {'text/plain', 'text/html'}:
+                text = _part_text(part)
+                if text:
+                    body_parts.append(text)
+    else:
+        body_text = _part_text(message)
+        if body_text:
+            body_parts.append(body_text)
+
+    lines.extend(['', 'Message Body:'])
+    lines.append('\n\n--- MIME PART ---\n\n'.join(body_parts)[:50000] or '(No readable text body found.)')
+
+    if attachments:
+        lines.extend(['', 'Attachments:'])
+        for attachment in attachments[:20]:
+            safe_filename = re.sub(r'[.@]', '_', attachment['filename'])
+            lines.append(
+                f"- {safe_filename} | {attachment['content_type']} | {attachment['size']} bytes"
+            )
+
+    parsed_text = '\n'.join(lines).strip()
+    if not parsed_text:
+        raise ValueError('No readable email content was found in the .eml file.')
+    return parsed_text
 
 
 # =============================================================================
@@ -1080,6 +1251,29 @@ def phishing_analyze(request):
             'limit': limit,
             'remaining': remaining,
         },
+    })
+
+
+@login_required
+@require_POST
+def phishing_upload_eml(request):
+    uploaded_file = request.FILES.get('eml_file')
+    if not uploaded_file:
+        return JsonResponse({'error': 'Upload a .eml file first.'}, status=400)
+
+    try:
+        email_text = _parse_eml_upload(uploaded_file)
+    except ValueError as exc:
+        return JsonResponse({'error': str(exc)}, status=400)
+
+    if len(email_text) > 75000:
+        email_text = email_text[:75000]
+
+    result = _analyze_phishing_email(email_text, full_enrichment=True)
+    return JsonResponse({
+        'filename': uploaded_file.name,
+        'email_text': email_text,
+        'result': result,
     })
 
 
