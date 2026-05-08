@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Python 3.10+
+- Python 3.13 recommended; Python 3.12+ required for Django 6
 - Node.js 18+ for Tailwind CSS compilation
 - Groq API key for AI chat: https://console.groq.com/keys
 - VirusTotal API key for Threat Intelligence Lookup
@@ -93,22 +93,54 @@ In your hosting platform, configure these as server-side environment variables:
 SECRET_KEY=your-production-secret
 GROQ_API_KEY=your-production-groq-key
 VIRUSTOTAL_API_KEY=your-production-virustotal-key
+ABUSEIPDB_API_KEY=your-production-abuseipdb-key
+OTX_API_KEY=your-production-otx-key
 DEBUG=False
 ALLOWED_HOSTS=your-domain.example
 CSRF_TRUSTED_ORIGINS=https://your-domain.example
+DATABASE_URL=postgresql://user:password@host:5432/database
 ```
 
-Run the normal deployment commands for your host, including:
+Required packages are listed in `requirements.txt` and `package.json`.
+
+## 7. Render Deployment
+
+This repo includes:
+
+- `render.yaml` for a Render web service and PostgreSQL database blueprint
+- `build.sh` for installing dependencies, collecting static files, and running migrations
+- `.python-version` pinned to Python 3.13.4
+
+Recommended Render settings if configuring manually:
+
+```bash
+Build Command: bash build.sh
+Start Command: gunicorn cyberguide.wsgi:application
+```
+
+Set these environment variables in Render:
+
+```env
+DEBUG=False
+SECRET_KEY=generate-a-secure-secret
+ALLOWED_HOSTS=your-render-service.onrender.com
+CSRF_TRUSTED_ORIGINS=https://your-render-service.onrender.com
+DATABASE_URL=your-render-postgresql-internal-database-url
+GROQ_API_KEY=your-production-groq-key
+VIRUSTOTAL_API_KEY=your-production-virustotal-key
+ABUSEIPDB_API_KEY=your-production-abuseipdb-key
+OTX_API_KEY=your-production-otx-key
+```
+
+Render will run:
 
 ```bash
 pip install -r requirements.txt
+python manage.py collectstatic --no-input
 python manage.py migrate
-npm install
-npm run build:css
-python manage.py collectstatic
 ```
 
-Required packages are already listed in `requirements.txt` and `package.json`. No extra Python package is needed for VirusTotal because the project already uses `httpx`.
+The app uses PostgreSQL in production when `DATABASE_URL` is set. If `DATABASE_URL` is not set, it falls back to local SQLite.
 
 ## Project Structure
 

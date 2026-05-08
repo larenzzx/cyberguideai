@@ -9,7 +9,13 @@ database, and much more.
 
 import os
 from pathlib import Path
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
+
+try:
+    import dj_database_url
+except ImportError:
+    dj_database_url = None
 
 # Load environment variables from .env file
 # LEARNING: python-dotenv reads key=value pairs from .env and makes them
@@ -94,38 +100,35 @@ WSGI_APPLICATION = 'cyberguide.wsgi.application'
 # DATABASE CONFIGURATION
 # =============================================================================
 # LEARNING: Django supports multiple databases via its ORM (Object-Relational
-# Mapper). SQLite is a file-based database — perfect for development.
-# PostgreSQL is a production-grade database for when you scale.
+# Mapper). Local development uses SQLite by default.
+# Production hosts such as Render should provide DATABASE_URL for PostgreSQL.
 #
-# MIGRATION GUIDE: When you're ready to switch to PostgreSQL, comment out
-# the SQLite block below and uncomment the PostgreSQL block. That's it —
-# your Django ORM code stays the same because it's database-agnostic.
+# The Django ORM code stays database-agnostic.
 # =============================================================================
 
-# ACTIVE: SQLite (development)
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
+DATABASE_URL = os.environ.get('DATABASE_URL', '')
 
-# READY TO SWAP: PostgreSQL (production)
-# To migrate to PostgreSQL:
-# 1. Install psycopg2: pip install psycopg2-binary
-# 2. Comment out the SQLite block above
-# 3. Uncomment the block below and fill in your credentials
-#
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql',
-#         'NAME': os.environ.get('DB_NAME', 'cyberguide'),
-#         'USER': os.environ.get('DB_USER', 'postgres'),
-#         'PASSWORD': os.environ.get('DB_PASSWORD', ''),
-#         'HOST': os.environ.get('DB_HOST', 'localhost'),
-#         'PORT': os.environ.get('DB_PORT', '5432'),
-#     }
-# }
+if DATABASE_URL:
+    if dj_database_url is None:
+        raise ImproperlyConfigured(
+            'DATABASE_URL is set but dj-database-url is not installed. '
+            'Run pip install -r requirements.txt.'
+        )
+
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=600,
+            ssl_require=os.environ.get('DB_SSL_REQUIRE', 'True') == 'True',
+        )
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
