@@ -1,0 +1,38 @@
+services:
+  db:
+    image: postgres:16
+    container_name: cyberguideai-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-cyberguideai}
+      POSTGRES_USER: ${POSTGRES_USER:-cyberguideai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-this-local-db-password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cyberguideai} -d ${POSTGRES_DB:-cyberguideai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build: .
+    container_name: cyberguideai-web
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-cyberguideai}:${POSTGRES_PASSWORD:-change-this-local-db-password}@db:5432/${POSTGRES_DB:-cyberguideai}
+      DB_SSL_REQUIRE: "False"
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py collectstatic --no-input &&
+             gunicorn cyberguide.wsgi:application --bind 0.0.0.0:8000"
+
+volumes:
+  postgres_data:
