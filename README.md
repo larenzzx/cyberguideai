@@ -53,7 +53,6 @@ Results include verdicts, detection data, reputation signals, categories, source
 - User registration and login
 - Staff/admin user management
 - User approval workflow
-- Email notification when an admin approves a pending account
 - Profile page
 - Forced password change support for admin-created users
 - Custom confirmation modals instead of browser default alerts
@@ -77,23 +76,6 @@ Results include verdicts, detection data, reputation signals, categories, source
 - DaisyUI-style utility classes and custom dark cybersecurity UI
 - Groq API for AI chat
 - VirusTotal, AbuseIPDB, and AlienVault OTX for threat intelligence enrichment
-
-## Production Email
-
-CyberGuide AI can email users after an admin approves their pending account. Configure SMTP values in the hosting platform environment:
-
-```env
-EMAIL_HOST=smtp.gmail.com
-EMAIL_PORT=587
-EMAIL_USE_TLS=True
-EMAIL_HOST_USER=your-email@example.com
-EMAIL_HOST_PASSWORD=your-email-app-password
-DEFAULT_FROM_EMAIL=CyberGuide AI <your-email@example.com>
-EMAIL_TIMEOUT=10
-```
-
-For Gmail, use a Google App Password instead of your normal password.
-
 
 ## Disclaimer
 
