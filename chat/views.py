@@ -26,6 +26,7 @@ from django.db.models import Count
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import ensure_csrf_cookie
 from dotenv import dotenv_values
 
 from .models import Conversation, Message
@@ -1183,6 +1184,7 @@ def logout_view(request):
 # CHAT VIEWS
 # =============================================================================
 
+@ensure_csrf_cookie
 def guest_landing(request):
     """Root landing page — guests get the chat UI, logged-in users go to /chat/."""
     if request.user.is_authenticated:
@@ -1190,6 +1192,7 @@ def guest_landing(request):
     return render(request, 'chat/guest_home.html', {'guest_chat_limit': GUEST_CHAT_DAILY_LIMIT})
 
 
+@ensure_csrf_cookie
 def threat_intelligence(request):
     """Standalone threat intelligence lookup page for guests and users."""
     context = {
@@ -1201,6 +1204,7 @@ def threat_intelligence(request):
     return render(request, 'threat_intel/lookup.html', context)
 
 
+@ensure_csrf_cookie
 def ioc_extractor(request):
     """SOC investigation workspace for extracting and enriching IOCs."""
     context = {
@@ -1211,6 +1215,7 @@ def ioc_extractor(request):
     return render(request, 'ioc_extractor/workspace.html', context)
 
 
+@ensure_csrf_cookie
 def phishing_analyzer(request):
     """Dedicated phishing email investigation workspace."""
     context = {
