@@ -31,6 +31,12 @@ class RegisterForm(UserCreationForm):
             'placeholder': 'Confirm your password'
         })
 
+    def clean_email(self):
+        email = self.cleaned_data['email'].strip().lower()
+        if User.objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError('An account with this email already exists.')
+        return email
+
     def save(self, commit=True):
         user = super().save(commit=False)
         user.email = self.cleaned_data['email']
@@ -79,8 +85,8 @@ class AdminCreateUserForm(forms.Form):
         return username
 
     def clean_email(self):
-        email = self.cleaned_data['email']
-        if User.objects.filter(email=email).exists():
+        email = self.cleaned_data['email'].strip().lower()
+        if User.objects.filter(email__iexact=email).exists():
             raise forms.ValidationError('An account with this email already exists.')
         return email
 
@@ -112,6 +118,15 @@ class AdminEditUserForm(forms.ModelForm):
         self.fields['first_name'].required = False
         self.fields['last_name'].required = False
 
+    def clean_email(self):
+        email = self.cleaned_data['email'].strip().lower()
+        existing = User.objects.filter(email__iexact=email)
+        if self.instance and self.instance.pk:
+            existing = existing.exclude(pk=self.instance.pk)
+        if existing.exists():
+            raise forms.ValidationError('An account with this email already exists.')
+        return email
+
 
 class ProfileEditForm(forms.ModelForm):
     class Meta:
@@ -126,6 +141,15 @@ class ProfileEditForm(forms.ModelForm):
             })
         self.fields['first_name'].required = False
         self.fields['last_name'].required = False
+
+    def clean_email(self):
+        email = self.cleaned_data['email'].strip().lower()
+        existing = User.objects.filter(email__iexact=email)
+        if self.instance and self.instance.pk:
+            existing = existing.exclude(pk=self.instance.pk)
+        if existing.exists():
+            raise forms.ValidationError('An account with this email already exists.')
+        return email
 
 
 class StyledPasswordChangeForm(DjangoPasswordChangeForm):
